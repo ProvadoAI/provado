@@ -171,12 +171,12 @@ The point is not to create another feature list. The point is to maintain a mark
 
 | Domain ↓ / Capability → | Detection | Correlation | Causality | Prediction | Economic Impact | Autonomous Action |
 |---|---|---|---|---|---|---|
-| Technical / System | <span style="color:green">FULL</span> | <span style="color:green">FULL</span> | <span style="color:green">STRONG</span> | <span style="color:green">STRONG</span> | <span style="color:red">WEAK</span> | <span style="color:orange">EMERGING</span> |
-| User / Behavior | <span style="color:green">FULL</span> | <span style="color:goldenrod">MODERATE</span> | <span style="color:goldenrod">MODERATE</span> | <span style="color:goldenrod">MODERATE</span> | <span style="color:red">WEAK</span> | <span style="color:red">WEAK</span> |
-| Operational | <span style="color:goldenrod">MODERATE</span> | <span style="color:red">WEAK</span> | <span style="color:red">WEAK</span> | <span style="color:red">WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> |
-| Commercial | <span style="color:goldenrod">MODERATE</span> | <span style="color:red">WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:red">WEAK</span> | <span style="color:gray">ABSENT</span> |
-| External Market | <span style="color:red">WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:gray">ABSENT</span> |
-| Cross-Domain Revenue | <span style="color:red">WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:gray">ABSENT</span> |
+| Technical / System | 🟢 FULL | 🟢 FULL | 🟢 STRONG | 🟢 STRONG | 🔴 WEAK | 🟠 EMERGING |
+| User / Behavior | 🟢 FULL | 🟡 MODERATE | 🟡 MODERATE | 🟡 MODERATE | 🔴 WEAK | 🔴 WEAK |
+| Operational | 🟡 MODERATE | 🔴 WEAK | 🔴 WEAK | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK |
+| Commercial | 🟡 MODERATE | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | 🔴 WEAK | ⚪ ABSENT |
+| External Market | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚪ ABSENT |
+| Cross-Domain Revenue | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚪ ABSENT |
 
 ### Current Interpretation
 

@@ -167,16 +167,28 @@ Use a capability coverage grid to identify where current ecommerce monitoring, o
 
 The point is not to create another feature list. The point is to maintain a market coverage map that makes visible which cells are crowded and which cells are still relatively empty.
 
+### Status Legend
+
+| Marker | Meaning |
+|---|---|
+| 🟢 FULL | Market is mature / crowded |
+| 🟩 STRONG | Strong competitor capability |
+| 🟡 MODERATE | Partially covered |
+| 🟠 EMERGING | Developing but not yet dominant |
+| 🔴 WEAK | Weakly covered |
+| ⚫ VERY WEAK | Very weakly covered |
+| ⚪ ABSENT | Mostly absent / open |
+
 ### Coverage Grid
 
 | Domain ↓ / Capability → | Detection | Correlation | Causality | Prediction | Economic Impact | Autonomous Action |
 |---|---|---|---|---|---|---|
-| Technical / System | FULL | FULL | STRONG | STRONG | WEAK | EMERGING |
-| User / Behavior | FULL | MODERATE | MODERATE | MODERATE | WEAK | WEAK |
-| Operational | MODERATE | WEAK | WEAK | WEAK | VERY WEAK | VERY WEAK |
-| Commercial | MODERATE | WEAK | VERY WEAK | VERY WEAK | WEAK | ABSENT |
-| External Market | WEAK | VERY WEAK | VERY WEAK | VERY WEAK | VERY WEAK | ABSENT |
-| Cross-Domain Revenue | WEAK | VERY WEAK | VERY WEAK | VERY WEAK | VERY WEAK | ABSENT |
+| Technical / System | 🟢 FULL | 🟢 FULL | 🟩 STRONG | 🟩 STRONG | 🔴 WEAK | 🟠 EMERGING |
+| User / Behavior | 🟢 FULL | 🟡 MODERATE | 🟡 MODERATE | 🟡 MODERATE | 🔴 WEAK | 🔴 WEAK |
+| Operational | 🟡 MODERATE | 🔴 WEAK | 🔴 WEAK | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK |
+| Commercial | 🟡 MODERATE | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | 🔴 WEAK | ⚪ ABSENT |
+| External Market | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚪ ABSENT |
+| Cross-Domain Revenue | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚪ ABSENT |
 
 ### Current Interpretation
 

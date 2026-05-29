@@ -156,3 +156,92 @@ The output should be business-facing, not only technical:
 - What minimum data is required to estimate revenue impact credibly?
 - Should the first MVP focus only on internal behavior, or include a small number of external-threat indicators?
 - Which external indicators are realistic to collect without excessive complexity or cost?
+
+---
+
+## 002. Ecommerce Revenue Opportunity Coverage Map
+
+### Summary
+
+Use a capability coverage grid to identify where current ecommerce monitoring, observability, analytics, and intelligence tools are already strong, and where Provado may find weaker-covered product opportunities.
+
+The point is not to create another feature list. The point is to maintain a market coverage map that makes visible which cells are crowded and which cells are still relatively empty.
+
+### Coverage Grid
+
+| Domain ↓ / Capability → | Detection | Correlation | Causality | Prediction | Economic Impact | Autonomous Action |
+|---|---|---|---|---|---|---|
+| Technical / System | FULL | FULL | STRONG | STRONG | WEAK | EMERGING |
+| User / Behavior | FULL | MODERATE | MODERATE | MODERATE | WEAK | WEAK |
+| Operational | MODERATE | WEAK | WEAK | WEAK | VERY WEAK | VERY WEAK |
+| Commercial | MODERATE | WEAK | VERY WEAK | VERY WEAK | WEAK | ABSENT |
+| External Market | WEAK | VERY WEAK | VERY WEAK | VERY WEAK | VERY WEAK | ABSENT |
+| Cross-Domain Revenue | WEAK | VERY WEAK | VERY WEAK | VERY WEAK | VERY WEAK | ABSENT |
+
+### Current Interpretation
+
+The market is already crowded at the lower telemetry and monitoring layers:
+
+- raw telemetry
+- dashboards
+- alerting
+- infrastructure monitoring
+- application performance monitoring
+- product analytics
+- session replay
+- funnel analytics
+
+The weaker areas appear higher in the interpretation stack:
+
+- cross-domain revenue causality
+- confidence-based causal explanation
+- economic impact estimation
+- revenue-risk prediction
+- business-impact attribution across technical, behavioral, operational, commercial, and external signals
+
+### Opportunity Pattern
+
+Most competitors are strong inside one domain:
+
+- observability tools understand systems
+- analytics tools understand users
+- ecommerce analytics tools understand revenue dashboards
+- ad platforms understand campaign performance
+- ERP systems understand inventory and operations
+
+The gap appears when revenue changes must be explained across domains.
+
+Example:
+
+> Revenue is declining, but the cause is not only technical. It may be partly payment approval degradation, partly mobile checkout friction, partly inventory unavailability, and partly competitor activity.
+
+This requires a layer above the individual tools.
+
+### Provado Angle
+
+Provado can position this as:
+
+> Revenue causality and confidence layer for ecommerce operations.
+
+In this positioning, Provado should not initially try to replace tools like Datadog, Dynatrace, New Relic, Amplitude, Mixpanel, Contentsquare, or Triple Whale.
+
+Instead, Provado should ingest signals from existing tools and translate them into probable revenue-impact explanations with confidence scoring.
+
+### Example Output
+
+> Revenue risk detected. Confidence: 87%.
+>
+> Primary suspected causes:
+> - payment approval degradation
+> - mobile checkout abandonment increase
+> - inventory unavailability for top SKUs
+>
+> Estimated revenue impact: high.
+
+### Why This Matters
+
+This map helps prevent Provado from entering saturated areas too early.
+
+The strategic lesson is:
+
+> Do not start where the market is already full. Start where the grid is emptier and the customer pain is still real.

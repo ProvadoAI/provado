@@ -167,28 +167,16 @@ Use a capability coverage grid to identify where current ecommerce monitoring, o
 
 The point is not to create another feature list. The point is to maintain a market coverage map that makes visible which cells are crowded and which cells are still relatively empty.
 
-### Status Legend
-
-| Marker | Meaning |
-|---|---|
-| 🟢 FULL | Market is mature / crowded |
-| 🟩 STRONG | Strong competitor capability |
-| 🟡 MODERATE | Partially covered |
-| 🟠 EMERGING | Developing but not yet dominant |
-| 🔴 WEAK | Weakly covered |
-| ⚫ VERY WEAK | Very weakly covered |
-| ⚪ ABSENT | Mostly absent / open |
-
 ### Coverage Grid
 
 | Domain ↓ / Capability → | Detection | Correlation | Causality | Prediction | Economic Impact | Autonomous Action |
 |---|---|---|---|---|---|---|
-| Technical / System | 🟢 FULL | 🟢 FULL | 🟩 STRONG | 🟩 STRONG | 🔴 WEAK | 🟠 EMERGING |
-| User / Behavior | 🟢 FULL | 🟡 MODERATE | 🟡 MODERATE | 🟡 MODERATE | 🔴 WEAK | 🔴 WEAK |
-| Operational | 🟡 MODERATE | 🔴 WEAK | 🔴 WEAK | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK |
-| Commercial | 🟡 MODERATE | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | 🔴 WEAK | ⚪ ABSENT |
-| External Market | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚪ ABSENT |
-| Cross-Domain Revenue | 🔴 WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚫ VERY WEAK | ⚪ ABSENT |
+| Technical / System | <span style="color:green">FULL</span> | <span style="color:green">FULL</span> | <span style="color:green">STRONG</span> | <span style="color:green">STRONG</span> | <span style="color:red">WEAK</span> | <span style="color:orange">EMERGING</span> |
+| User / Behavior | <span style="color:green">FULL</span> | <span style="color:goldenrod">MODERATE</span> | <span style="color:goldenrod">MODERATE</span> | <span style="color:goldenrod">MODERATE</span> | <span style="color:red">WEAK</span> | <span style="color:red">WEAK</span> |
+| Operational | <span style="color:goldenrod">MODERATE</span> | <span style="color:red">WEAK</span> | <span style="color:red">WEAK</span> | <span style="color:red">WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> |
+| Commercial | <span style="color:goldenrod">MODERATE</span> | <span style="color:red">WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:red">WEAK</span> | <span style="color:gray">ABSENT</span> |
+| External Market | <span style="color:red">WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:gray">ABSENT</span> |
+| Cross-Domain Revenue | <span style="color:red">WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:darkred">VERY WEAK</span> | <span style="color:gray">ABSENT</span> |
 
 ### Current Interpretation
 

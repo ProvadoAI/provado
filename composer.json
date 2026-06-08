@@ -8,6 +8,11 @@
       "Mquevedob\\Provado\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "Mquevedob\\Provado\\Tests\\": "tests/"
+    }
+  },
   "extra": {
     "laravel": {
       "providers": [
@@ -18,6 +23,12 @@
   "require": {
     "php": "^8.2",
     "illuminate/support": "^11.0|^12.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.5|^11.0"
+  },
+  "scripts": {
+    "test": "vendor/bin/phpunit"
   },
   "minimum-stability": "stable",
   "prefer-stable": true

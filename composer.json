@@ -1,0 +1,24 @@
+{
+  "name": "mquevedob/provado",
+  "description": "Revenue protection and diagnostics package for Laravel ecommerce applications.",
+  "type": "library",
+  "license": "proprietary",
+  "autoload": {
+    "psr-4": {
+      "Mquevedob\\Provado\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Mquevedob\\Provado\\ProvadoServiceProvider"
+      ]
+    }
+  },
+  "require": {
+    "php": "^8.2",
+    "illuminate/support": "^11.0|^12.0"
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

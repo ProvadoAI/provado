@@ -36,7 +36,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase | Status | Goal |
 |---|---:|---|
 | Phase 0 | [x] | Project skeleton |
-| Phase 1 | [ ] | Canonical signal model |
+| Phase 1 | [x] | Canonical signal model |
 | Phase 2 | [ ] | Configuration and secrets boundary |
 | Phase 3 | [ ] | Source adapter interface |
 | Phase 4 | [ ] | New Relic adapter |
@@ -100,6 +100,7 @@ Update docs/ROADMAP.md marking Phase 0 as done.
 ---
 
 ## Phase 1 — Canonical signal model
+**Status:** [x]
 
 **Goal:** Define Provado's internal signal model before implementing vendor-specific integrations.
 

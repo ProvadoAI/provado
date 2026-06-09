@@ -45,7 +45,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 7 | [x] | Correlation substrate |
 | Phase 8 | [x] | Diagnostic pattern interface |
 | Phase 9 | [x] | First diagnostic pattern |
-| Phase 10 | [ ] | Incident output |
+| Phase 10 | [~] | Incident output |
 | Phase 11 | [ ] | Pipeline orchestration |
 | Phase 12 | [ ] | Error handling and observability |
 | Phase 13 | [ ] | Alpha demo flow |
@@ -303,6 +303,27 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - PHPUnit coverage for pattern identity, support matching, unsupported evaluation, supported finding output, deterministic finding ids, severity mapping, evidence, and recommendations
 
 **Verification note:** Phase 9 was marked done after local PHPUnit verification.
+
+---
+
+## Phase 10 — Incident output
+
+**Status:** [~]
+
+**Goal:** Convert diagnostic findings into deterministic, readable incident report output without adding pipeline orchestration or integrations.
+
+**Deliverables:**
+
+- `IncidentReport`, `IncidentReportId`, `IncidentReportSeverity`, `IncidentReportBuilder`, and `IncidentReportRenderer` under `src/Incidents/`
+- Immutable incident report primitives with required title/summary validation and finding type validation
+- Deterministic report ids generated from findings independent of finding order
+- Severity aggregation where the highest diagnostic finding severity wins
+- Evidence aggregation with recursive secret redaction
+- Recommended next-check aggregation with order-preserving deduplication
+- Plain-text incident rendering that includes title, severity, summary, finding count, evidence, and recommended next checks
+- PHPUnit coverage for report id determinism, severity aggregation, validation, builder behavior, evidence redaction, recommendation deduplication, and text rendering
+
+**Verification note:** Phase 10 remains in progress until tests pass locally.
 
 ---
 

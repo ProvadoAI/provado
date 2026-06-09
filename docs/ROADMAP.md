@@ -37,7 +37,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 |---|---:|---|
 | Phase 0 | [x] | Project skeleton |
 | Phase 1 | [x] | Canonical signal model |
-| Phase 2 | [~] | Configuration and secrets boundary |
+| Phase 2 | [x] | Configuration and secrets boundary |
 | Phase 3 | [ ] | Source adapter interface |
 | Phase 4 | [ ] | New Relic adapter |
 | Phase 5 | [ ] | Adobe Commerce adapter |
@@ -161,7 +161,7 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 
 ## Phase 2 — Configuration and secrets boundary
 
-**Status:** [~]
+**Status:** [x]
 
 **Goal:** Define immutable configuration value objects and prevent accidental secret exposure.
 
@@ -174,7 +174,7 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - required-value validation for enabled sources
 - PHPUnit coverage for valid config, disabled sources, missing required credentials, and secret redaction
 
-**Verification note:** Phase 2 is not marked done because repository instructions forbid running PHPUnit in this environment. Mark this phase `[x]` after the test suite passes locally.
+**Verification note:** Phase 2 was marked done after local PHPUnit verification.
 
 ---
 

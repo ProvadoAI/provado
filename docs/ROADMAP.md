@@ -43,7 +43,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 5 | [x] | Adobe Commerce adapter |
 | Phase 6 | [x] | Signal storage |
 | Phase 7 | [x] | Correlation substrate |
-| Phase 8 | [~] | Diagnostic pattern interface |
+| Phase 8 | [x] | Diagnostic pattern interface |
 | Phase 9 | [ ] | First diagnostic pattern |
 | Phase 10 | [ ] | Incident output |
 | Phase 11 | [ ] | Pipeline orchestration |
@@ -270,7 +270,7 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 
 ## Phase 8 — Diagnostic pattern interface
 
-**Status:** [~]
+**Status:** [x]
 
 **Goal:** Create the diagnostic pattern boundary so future phases can evaluate correlated signal groups without introducing real diagnostic patterns or incident reports yet.
 
@@ -282,7 +282,7 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - `DiagnosticPatternRegistry` for validating, matching, and evaluating supported patterns only
 - PHPUnit coverage for result handling, finding validation, deterministic ids, severity validation, and registry behavior
 
-**Verification note:** Phase 8 remains in progress until the repository owner runs tests locally.
+**Verification note:** Phase 8 was marked done after local PHPUnit verification, including trimmed diagnostic pattern id validation.
 
 ---
 

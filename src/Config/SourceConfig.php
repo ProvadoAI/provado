@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Provado\Config;
+namespace Mquevedob\Provado\Config;
 
 use InvalidArgumentException;
 use JsonSerializable;

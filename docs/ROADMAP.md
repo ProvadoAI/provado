@@ -44,7 +44,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 6 | [x] | Signal storage |
 | Phase 7 | [x] | Correlation substrate |
 | Phase 8 | [x] | Diagnostic pattern interface |
-| Phase 9 | [~] | First diagnostic pattern |
+| Phase 9 | [x] | First diagnostic pattern |
 | Phase 10 | [ ] | Incident output |
 | Phase 11 | [ ] | Pipeline orchestration |
 | Phase 12 | [ ] | Error handling and observability |
@@ -289,7 +289,7 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 
 ## Phase 9 — First diagnostic pattern
 
-**Status:** [~]
+**Status:** [x]
 
 **Goal:** Implement the first deterministic diagnostic pattern that evaluates correlated fixture-style New Relic and Adobe Commerce signals without introducing incident reports or external integrations.
 
@@ -302,7 +302,7 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - Recommended next checks for checkout application errors, deployments, Adobe Commerce/payment logs, and cache/session behavior
 - PHPUnit coverage for pattern identity, support matching, unsupported evaluation, supported finding output, deterministic finding ids, severity mapping, evidence, and recommendations
 
-**Verification note:** Phase 9 remains in progress until PHPUnit is run locally under repository-owner verification rules.
+**Verification note:** Phase 9 was marked done after local PHPUnit verification.
 
 ---
 

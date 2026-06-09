@@ -1,0 +1,14 @@
+{
+  "id": "error_rate_spike",
+  "event_type": "error_rate_spike",
+  "timestamp": "2026-06-08T12:05:00+00:00",
+  "severity": "error",
+  "application": {
+    "name": "checkout-api"
+  },
+  "metrics": {
+    "error_rate": 0.084,
+    "baseline_error_rate": 0.012,
+    "throughput": 94
+  }
+}

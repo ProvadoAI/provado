@@ -39,7 +39,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 1 | [x] | Canonical signal model |
 | Phase 2 | [x] | Configuration and secrets boundary |
 | Phase 3 | [x] | Source adapter interface |
-| Phase 4 | [ ] | New Relic adapter |
+| Phase 4 | [~] | New Relic adapter |
 | Phase 5 | [ ] | Adobe Commerce adapter |
 | Phase 6 | [ ] | Signal storage |
 | Phase 7 | [ ] | Correlation substrate |
@@ -193,6 +193,24 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - PHPUnit coverage for source fetch results, registry validation/resolution, enabled adapter filtering, and error context redaction
 
 **Verification note:** Phase 3 was marked done after local PHPUnit verification.
+
+---
+
+## Phase 4 — New Relic adapter
+
+**Status:** [~]
+
+**Goal:** Normalize New Relic-like observability fixture payloads into canonical signals without real provider calls.
+
+**Deliverables:**
+
+- `NewRelicAdapter` implementing the source adapter boundary
+- `NewRelicFixtureClient` for local New Relic-like fixture payloads
+- `NewRelicPayloadMapper` for latency, error-rate, and transaction-slowdown signals
+- Fixture payloads under `tests/Fixtures/new_relic/`
+- PHPUnit coverage for adapter support, fetch result shape, payload mapping, and invalid fixture handling
+
+**Verification note:** Phase 4 remains in progress until the repository owner runs the test suite locally under the repository command rules.
 
 ---
 

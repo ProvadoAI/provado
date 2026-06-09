@@ -177,6 +177,42 @@ class CorrelationTest extends TestCase
         $this->assertSame(['signal-1', 'signal-2'], $this->signalIds($groups[0]->signals));
     }
 
+    public function test_criteria_window_wider_than_method_window_does_not_expand_correlation(): void
+    {
+        $insideFirst = $this->signal('signal-1', timestamp: new DateTimeImmutable('2026-06-08T12:02:00+00:00'));
+        $insideSecond = $this->signal('signal-2', timestamp: new DateTimeImmutable('2026-06-08T12:03:00+00:00'));
+        $outside = $this->signal('signal-3', timestamp: new DateTimeImmutable('2026-06-08T12:08:00+00:00'));
+        $engine = new CorrelationEngine($this->storeWithSignals([$insideFirst, $insideSecond, $outside]));
+
+        $groups = $engine->correlate(
+            new TimeWindow(new DateTimeImmutable('2026-06-08T12:00:00+00:00'), new DateTimeImmutable('2026-06-08T12:05:00+00:00')),
+            CorrelationCriteria::all()->within(new TimeWindow(
+                new DateTimeImmutable('2026-06-08T11:55:00+00:00'),
+                new DateTimeImmutable('2026-06-08T12:10:00+00:00'),
+            )),
+        );
+
+        $this->assertCount(1, $groups);
+        $this->assertSame(['signal-1', 'signal-2'], $this->signalIds($groups[0]->signals));
+    }
+
+    public function test_non_overlapping_method_and_criteria_windows_return_no_groups(): void
+    {
+        $first = $this->signal('signal-1', timestamp: new DateTimeImmutable('2026-06-08T12:00:00+00:00'));
+        $second = $this->signal('signal-2', timestamp: new DateTimeImmutable('2026-06-08T12:01:00+00:00'));
+        $engine = new CorrelationEngine($this->storeWithSignals([$first, $second]));
+
+        $groups = $engine->correlate(
+            new TimeWindow(new DateTimeImmutable('2026-06-08T12:00:00+00:00'), new DateTimeImmutable('2026-06-08T12:05:00+00:00')),
+            CorrelationCriteria::all()->within(new TimeWindow(
+                new DateTimeImmutable('2026-06-08T12:06:00+00:00'),
+                new DateTimeImmutable('2026-06-08T12:10:00+00:00'),
+            )),
+        );
+
+        $this->assertSame([], $groups);
+    }
+
     public function test_empty_signal_group_rejected(): void
     {
         $this->expectException(InvalidArgumentException::class);

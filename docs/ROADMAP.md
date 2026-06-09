@@ -42,7 +42,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 4 | [x] | New Relic adapter |
 | Phase 5 | [x] | Adobe Commerce adapter |
 | Phase 6 | [x] | Signal storage |
-| Phase 7 | [~] | Correlation substrate |
+| Phase 7 | [x] | Correlation substrate |
 | Phase 8 | [ ] | Diagnostic pattern interface |
 | Phase 9 | [ ] | First diagnostic pattern |
 | Phase 10 | [ ] | Incident output |
@@ -251,7 +251,7 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 
 ## Phase 7 — Correlation substrate
 
-**Status:** [~]
+**Status:** [x]
 
 **Goal:** Group already-stored canonical signals by time window and shared entities without assigning diagnostic meaning.
 
@@ -263,8 +263,7 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - `CorrelationId` deterministic value object generated from grouped signal ids independent of signal order
 - PHPUnit coverage for grouping, filtering, deterministic ids, group summaries, and empty-group rejection
 
-**Verification note:** Phase 7 remains in progress until local PHPUnit verification is performed.
-
+**Verification note:** Phase 7 was marked done after local PHPUnit verification, including the criteria-window bounding fix.
 
 ---
 

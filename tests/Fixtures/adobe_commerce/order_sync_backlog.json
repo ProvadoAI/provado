@@ -1,0 +1,13 @@
+{
+  "id": "order_sync_backlog",
+  "event_type": "order_sync_backlog",
+  "timestamp": "2026-06-08T12:05:00+00:00",
+  "severity": "warning",
+  "entities": {
+    "store": "default",
+    "queue": "sales_order_export"
+  },
+  "metrics": {
+    "backlog_count": 218
+  }
+}

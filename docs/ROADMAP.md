@@ -40,7 +40,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 2 | [x] | Configuration and secrets boundary |
 | Phase 3 | [x] | Source adapter interface |
 | Phase 4 | [~] | New Relic adapter |
-| Phase 5 | [ ] | Adobe Commerce adapter |
+| Phase 5 | [~] | Adobe Commerce adapter |
 | Phase 6 | [ ] | Signal storage |
 | Phase 7 | [ ] | Correlation substrate |
 | Phase 8 | [ ] | Diagnostic pattern interface |
@@ -211,6 +211,24 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - PHPUnit coverage for adapter support, fetch result shape, payload mapping, and invalid fixture handling
 
 **Verification note:** Phase 4 remains in progress until the repository owner runs the test suite locally under the repository command rules.
+
+---
+
+## Phase 5 — Adobe Commerce adapter
+
+**Status:** [~]
+
+**Goal:** Normalize Adobe Commerce-like commerce and operations fixture payloads into canonical signals without real provider calls.
+
+**Deliverables:**
+
+- `AdobeCommerceAdapter` implementing the source adapter boundary
+- `AdobeCommerceFixtureClient` for local Adobe Commerce-like fixture payloads
+- `AdobeCommercePayloadMapper` for checkout failure-rate, order sync backlog, inventory sync drift, and stuck indexer signals
+- Fixture payloads under `tests/Fixtures/adobe_commerce/`
+- PHPUnit coverage for adapter support, fetch result shape, payload mapping, invalid fixture handling, and time-window filtering
+
+**Verification note:** Phase 5 remains in progress until the repository owner runs the test suite locally under the repository command rules.
 
 ---
 

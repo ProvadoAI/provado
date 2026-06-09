@@ -1,0 +1,13 @@
+{
+  "id": "indexer_stuck",
+  "event_type": "indexer_stuck",
+  "timestamp": "2026-06-08T12:15:00+00:00",
+  "severity": "critical",
+  "entities": {
+    "store": "default",
+    "indexer": "catalogsearch_fulltext"
+  },
+  "metrics": {
+    "stuck_duration_minutes": 92
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "invalid_payload",
+  "event_type": "checkout_failure_rate",
+  "timestamp": "2026-06-08T12:20:00+00:00",
+  "severity": "error",
+  "entities": {
+    "store": "default"
+  },
+  "metrics": {
+    "failure_rate": "high"
+  }
+}

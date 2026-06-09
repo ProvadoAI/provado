@@ -41,7 +41,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 3 | [x] | Source adapter interface |
 | Phase 4 | [x] | New Relic adapter |
 | Phase 5 | [x] | Adobe Commerce adapter |
-| Phase 6 | [ ] | Signal storage |
+| Phase 6 | [~] | Signal storage |
 | Phase 7 | [ ] | Correlation substrate |
 | Phase 8 | [ ] | Diagnostic pattern interface |
 | Phase 9 | [ ] | First diagnostic pattern |
@@ -229,6 +229,23 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - PHPUnit coverage for adapter support, fetch result shape, payload mapping, invalid fixture handling, and time-window filtering
 
 **Verification note:** Phase 5 was marked done after local PHPUnit verification.
+
+---
+
+## Phase 6 — Signal storage
+
+**Status:** [~]
+
+**Goal:** Create the storage boundary for canonical signals before adding database persistence.
+
+**Deliverables:**
+
+- `SignalStore` interface for saving, listing, querying, and finding canonical signals
+- `SignalQuery` immutable query object with optional source, type, severity, entity, and time-window filters
+- `InMemorySignalStore` for Alpha fixture flows, indexed by signal id while preserving insertion order where possible
+- PHPUnit coverage for save, save-many, replacement, lookup, query filters, validation, and result array isolation
+
+**Verification note:** Phase 6 remains in progress until PHPUnit is run locally.
 
 ---
 

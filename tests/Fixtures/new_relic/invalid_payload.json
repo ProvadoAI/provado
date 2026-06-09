@@ -1,0 +1,9 @@
+{
+  "id": "invalid_payload",
+  "event_type": "latency_spike",
+  "timestamp": "2026-06-08T12:15:00+00:00",
+  "severity": "warning",
+  "metrics": {
+    "duration_ms": 1200
+  }
+}

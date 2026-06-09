@@ -1,0 +1,17 @@
+{
+  "id": "checkout_transaction_slowdown",
+  "event_type": "transaction_slowdown",
+  "timestamp": "2026-06-08T12:10:00+00:00",
+  "severity": "critical",
+  "application": {
+    "name": "checkout-api"
+  },
+  "transaction": {
+    "name": "WebTransaction/Checkout/SubmitOrder"
+  },
+  "metrics": {
+    "duration_ms": 5200,
+    "baseline_duration_ms": 900,
+    "throughput": 43
+  }
+}

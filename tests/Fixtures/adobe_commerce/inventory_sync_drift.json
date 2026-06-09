@@ -1,0 +1,13 @@
+{
+  "id": "inventory_sync_drift",
+  "event_type": "inventory_sync_drift",
+  "timestamp": "2026-06-08T12:10:00+00:00",
+  "severity": "critical",
+  "entities": {
+    "store": "default",
+    "sku": "24-MB01"
+  },
+  "metrics": {
+    "drift_count": 37
+  }
+}

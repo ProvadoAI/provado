@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Provado\Core;
+namespace Mquevedob\Provado\Core;
 
 use DateTimeImmutable;
 use InvalidArgumentException;

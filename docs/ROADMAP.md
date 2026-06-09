@@ -44,7 +44,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 6 | [x] | Signal storage |
 | Phase 7 | [x] | Correlation substrate |
 | Phase 8 | [x] | Diagnostic pattern interface |
-| Phase 9 | [ ] | First diagnostic pattern |
+| Phase 9 | [~] | First diagnostic pattern |
 | Phase 10 | [ ] | Incident output |
 | Phase 11 | [ ] | Pipeline orchestration |
 | Phase 12 | [ ] | Error handling and observability |
@@ -283,6 +283,26 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - PHPUnit coverage for result handling, finding validation, deterministic ids, severity validation, and registry behavior
 
 **Verification note:** Phase 8 was marked done after local PHPUnit verification, including trimmed diagnostic pattern id validation.
+
+---
+
+
+## Phase 9 — First diagnostic pattern
+
+**Status:** [~]
+
+**Goal:** Implement the first deterministic diagnostic pattern that evaluates correlated fixture-style New Relic and Adobe Commerce signals without introducing incident reports or external integrations.
+
+**Deliverables:**
+
+- `CheckoutDegradationPattern` under `src/Patterns/Checkout/`
+- Support detection for correlated Adobe Commerce `checkout_failure_rate` signals and New Relic `transaction_slowdown`, `latency_spike`, or `error_rate_spike` signals
+- Deterministic diagnostic finding output with severity derived from the correlation group's highest signal severity
+- Structured non-secret evidence including correlation metadata, involved sources/types, shared entities, timestamps, highest signal severity, and relevant metrics
+- Recommended next checks for checkout application errors, deployments, Adobe Commerce/payment logs, and cache/session behavior
+- PHPUnit coverage for pattern identity, support matching, unsupported evaluation, supported finding output, deterministic finding ids, severity mapping, evidence, and recommendations
+
+**Verification note:** Phase 9 remains in progress until PHPUnit is run locally under repository-owner verification rules.
 
 ---
 

@@ -21,8 +21,14 @@ final readonly class CorrelationEngine
     public function correlate(TimeWindow $window, ?CorrelationCriteria $criteria = null): array
     {
         $criteria ??= CorrelationCriteria::all();
+        $effectiveWindow = $this->effectiveWindow($window, $criteria->window);
+
+        if ($effectiveWindow === null) {
+            return [];
+        }
+
         $query = SignalQuery::all()
-            ->within($criteria->window ?? $window);
+            ->within($effectiveWindow);
 
         if ($criteria->source !== null) {
             $query = $query->withSource($criteria->source);
@@ -37,6 +43,26 @@ final readonly class CorrelationEngine
         }
 
         return $this->groupsFor($this->signals->query($query));
+    }
+
+    private function effectiveWindow(TimeWindow $requestedWindow, ?TimeWindow $criteriaWindow): ?TimeWindow
+    {
+        if ($criteriaWindow === null) {
+            return $requestedWindow;
+        }
+
+        $start = $requestedWindow->start > $criteriaWindow->start
+            ? $requestedWindow->start
+            : $criteriaWindow->start;
+        $end = $requestedWindow->end < $criteriaWindow->end
+            ? $requestedWindow->end
+            : $criteriaWindow->end;
+
+        if ($end < $start) {
+            return null;
+        }
+
+        return new TimeWindow($start, $end);
     }
 
     /**

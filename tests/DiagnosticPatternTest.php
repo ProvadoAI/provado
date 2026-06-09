@@ -152,6 +152,25 @@ class DiagnosticPatternTest extends TestCase
         ]);
     }
 
+    public function test_diagnostic_pattern_registry_rejects_untrimmed_ids(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Diagnostic pattern id must be trimmed.');
+
+        new DiagnosticPatternRegistry([new FakeDiagnosticPattern(' pattern-1 ', supported: true)]);
+    }
+
+    public function test_diagnostic_pattern_registry_rejects_ids_that_would_collide_after_trimming(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Diagnostic pattern id must be trimmed.');
+
+        new DiagnosticPatternRegistry([
+            new FakeDiagnosticPattern('pattern-1', supported: true),
+            new FakeDiagnosticPattern(' pattern-1 ', supported: false),
+        ]);
+    }
+
     public function test_matching_returns_only_supported_patterns(): void
     {
         $supported = new FakeDiagnosticPattern('supported', supported: true);

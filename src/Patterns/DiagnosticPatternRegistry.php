@@ -32,6 +32,10 @@ final readonly class DiagnosticPatternRegistry
                 throw new InvalidArgumentException('Diagnostic pattern id cannot be empty.');
             }
 
+            if (trim($patternId) !== $patternId) {
+                throw new InvalidArgumentException('Diagnostic pattern id must be trimmed.');
+            }
+
             if (array_key_exists($patternId, $registered)) {
                 throw new InvalidArgumentException(sprintf('Duplicate diagnostic pattern id "%s".', $patternId));
             }

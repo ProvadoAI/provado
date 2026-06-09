@@ -38,7 +38,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 0 | [x] | Project skeleton |
 | Phase 1 | [x] | Canonical signal model |
 | Phase 2 | [x] | Configuration and secrets boundary |
-| Phase 3 | [ ] | Source adapter interface |
+| Phase 3 | [~] | Source adapter interface |
 | Phase 4 | [ ] | New Relic adapter |
 | Phase 5 | [ ] | Adobe Commerce adapter |
 | Phase 6 | [ ] | Signal storage |
@@ -175,6 +175,24 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - PHPUnit coverage for valid config, disabled sources, missing required credentials, and secret redaction
 
 **Verification note:** Phase 2 was marked done after local PHPUnit verification.
+
+---
+
+## Phase 3 — Source adapter interface
+
+**Status:** [~]
+
+**Goal:** Create the source adapter boundary for future vendor integrations without implementing real provider calls.
+
+**Deliverables:**
+
+- `SourceAdapter` interface
+- `SourceFetchResult` immutable value object
+- `SourceFetchError` immutable value object with sanitized context
+- `SourceAdapterRegistry` for registered and enabled adapters
+- PHPUnit coverage for source fetch results, registry validation/resolution, enabled adapter filtering, and error context redaction
+
+**Verification note:** Phase 3 remains in progress because local PHPUnit verification was skipped under the repository command restrictions.
 
 ---
 

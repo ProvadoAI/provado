@@ -6,26 +6,16 @@ namespace Mquevedob\Provado\Tests;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
+use Mquevedob\Provado\Core\DeploymentReference;
+use Mquevedob\Provado\Core\EntityReference;
+use Mquevedob\Provado\Core\RawPayloadReference;
+use Mquevedob\Provado\Core\Signal;
+use Mquevedob\Provado\Core\SignalId;
+use Mquevedob\Provado\Core\SignalSeverity;
+use Mquevedob\Provado\Core\SignalSource;
+use Mquevedob\Provado\Core\SignalType;
+use Mquevedob\Provado\Core\TimeWindow;
 use PHPUnit\Framework\TestCase;
-use Provado\Core\DeploymentReference;
-use Provado\Core\EntityReference;
-use Provado\Core\RawPayloadReference;
-use Provado\Core\Signal;
-use Provado\Core\SignalId;
-use Provado\Core\SignalSeverity;
-use Provado\Core\SignalSource;
-use Provado\Core\SignalType;
-use Provado\Core\TimeWindow;
-
-require_once __DIR__.'/../src/Core/SignalId.php';
-require_once __DIR__.'/../src/Core/SignalSource.php';
-require_once __DIR__.'/../src/Core/SignalType.php';
-require_once __DIR__.'/../src/Core/SignalSeverity.php';
-require_once __DIR__.'/../src/Core/EntityReference.php';
-require_once __DIR__.'/../src/Core/TimeWindow.php';
-require_once __DIR__.'/../src/Core/DeploymentReference.php';
-require_once __DIR__.'/../src/Core/RawPayloadReference.php';
-require_once __DIR__.'/../src/Core/Signal.php';
 
 class SignalModelTest extends TestCase
 {

@@ -5,13 +5,9 @@ declare(strict_types=1);
 namespace Mquevedob\Provado\Tests;
 
 use InvalidArgumentException;
+use Mquevedob\Provado\Config\ProvadoConfig;
+use Mquevedob\Provado\Config\SourceCredentials;
 use PHPUnit\Framework\TestCase;
-use Provado\Config\ProvadoConfig;
-use Provado\Config\SourceCredentials;
-
-require_once __DIR__.'/../src/Config/SourceCredentials.php';
-require_once __DIR__.'/../src/Config/SourceConfig.php';
-require_once __DIR__.'/../src/Config/ProvadoConfig.php';
 
 class ConfigTest extends TestCase
 {

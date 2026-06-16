@@ -45,7 +45,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 7 | [x] | Correlation substrate |
 | Phase 8 | [x] | Diagnostic pattern interface |
 | Phase 9 | [x] | First diagnostic pattern |
-| Phase 10 | [~] | Incident output |
+| Phase 10 | [x] | Incident output |
 | Phase 11 | [ ] | Pipeline orchestration |
 | Phase 12 | [ ] | Error handling and observability |
 | Phase 13 | [ ] | Alpha demo flow |
@@ -308,7 +308,7 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 
 ## Phase 10 — Incident output
 
-**Status:** [~]
+**Status:** [x]
 
 **Goal:** Convert diagnostic findings into deterministic, readable incident report output without adding pipeline orchestration or integrations.
 
@@ -323,7 +323,7 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - Plain-text incident rendering that includes title, severity, summary, finding count, evidence, and recommended next checks
 - PHPUnit coverage for report id determinism, severity aggregation, validation, builder behavior, evidence redaction, recommendation deduplication, and text rendering
 
-**Verification note:** Phase 10 remains in progress until tests pass locally.
+**Verification note:** Phase 10 was marked done after local PHPUnit verification (98 tests, 274 assertions passing).
 
 ---
 

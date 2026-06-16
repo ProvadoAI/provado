@@ -27,7 +27,7 @@ final readonly class NewRelicPayloadMapper
         $timestamp = $this->timestamp($this->stringValue($payload, 'timestamp'));
         $applicationName = $this->nestedStringValue($payload, 'application', 'name');
         $transactionName = $this->optionalNestedStringValue($payload, 'transaction', 'name');
-        $storeName = $this->optionalNestedStringValue($payload, 'entities', 'store');
+        $storeName = $this->optionalStoreName($payload);
         $metrics = $this->metrics($payload);
 
         return new Signal(
@@ -58,6 +58,29 @@ final readonly class NewRelicPayloadMapper
         }
 
         return $references;
+    }
+
+    /**
+     * The store entity is an optional correlation hint. A missing or blank value
+     * is skipped rather than failing the whole signal mapping.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function optionalStoreName(array $payload): ?string
+    {
+        $entities = $payload['entities'] ?? null;
+
+        if (! is_array($entities)) {
+            return null;
+        }
+
+        $store = $entities['store'] ?? null;
+
+        if (! is_string($store) || trim($store) === '') {
+            return null;
+        }
+
+        return $store;
     }
 
     /**

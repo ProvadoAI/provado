@@ -11,12 +11,13 @@ final readonly class PipelineResult
 {
     /**
      * @param list<SourceFetchError> $errors
+     * @param list<PipelineError> $stageErrors
      */
     public function __construct(
         public ?IncidentReport $report,
-        public int $signalCount,
-        public int $correlationGroupCount,
+        public PipelineDiagnostics $diagnostics,
         public array $errors,
+        public array $stageErrors,
     ) {
     }
 
@@ -27,6 +28,6 @@ final readonly class PipelineResult
 
     public function hasErrors(): bool
     {
-        return $this->errors !== [];
+        return $this->errors !== [] || $this->stageErrors !== [];
     }
 }

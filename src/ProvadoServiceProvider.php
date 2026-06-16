@@ -5,6 +5,7 @@ namespace Mquevedob\Provado;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 use Mquevedob\Provado\Config\ProvadoConfig;
+use Mquevedob\Provado\Console\DiagnoseCommand;
 use Mquevedob\Provado\Incidents\IncidentReportBuilder;
 use Mquevedob\Provado\Patterns\Checkout\CheckoutDegradationPattern;
 use Mquevedob\Provado\Patterns\DiagnosticPatternRegistry;
@@ -38,6 +39,10 @@ class ProvadoServiceProvider extends ServiceProvider
 
         $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([DiagnoseCommand::class]);
+        }
     }
 
     /**

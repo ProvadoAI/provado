@@ -3,6 +3,12 @@
 return [
     'enabled' => env('PROVADO_ENABLED', true),
 
+    'observability' => [
+        // When enabled, pipeline progress is logged through Laravel's logger
+        // via PsrLoggerObserver; otherwise a NullPipelineObserver is used.
+        'logging' => env('PROVADO_LOGGING_ENABLED', false),
+    ],
+
     'sources' => [
         'new_relic' => [
             'enabled' => env('PROVADO_NEW_RELIC_ENABLED', false),

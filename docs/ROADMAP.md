@@ -46,7 +46,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 8 | [x] | Diagnostic pattern interface |
 | Phase 9 | [x] | First diagnostic pattern |
 | Phase 10 | [x] | Incident output |
-| Phase 11 | [~] | Pipeline orchestration |
+| Phase 11 | [x] | Pipeline orchestration |
 | Phase 12 | [ ] | Error handling and observability |
 | Phase 13 | [ ] | Alpha demo flow |
 | Phase 14 | [ ] | Source integration backlog |
@@ -329,7 +329,7 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 
 ## Phase 11 — Pipeline orchestration
 
-**Status:** [~]
+**Status:** [x]
 
 **Goal:** Run the full Alpha loop end-to-end as a single callable flow over Tier 0
 fixture data, composing the components built in Phases 1–10 without adding new
@@ -357,6 +357,8 @@ incident report → return a structured `PipelineResult`.
 - PHPUnit coverage running the full loop on New Relic + Adobe Commerce fixtures with no
   credentials and asserting a populated incident report, plus the no-signal (null report)
   and source-error-collected cases
+
+**Verification note:** Phase 11 was marked done after local PHPUnit verification (101 tests, 291 assertions passing) and merge of the pipeline implementation.
 
 ---
 

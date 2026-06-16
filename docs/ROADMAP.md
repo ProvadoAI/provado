@@ -47,7 +47,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 9 | [x] | First diagnostic pattern |
 | Phase 10 | [x] | Incident output |
 | Phase 11 | [x] | Pipeline orchestration |
-| Phase 12 | [ ] | Error handling and observability |
+| Phase 12 | [x] | Error handling and observability |
 | Phase 13 | [ ] | Alpha demo flow |
 | Phase 14 | [ ] | Source integration backlog |
 
@@ -364,7 +364,7 @@ incident report → return a structured `PipelineResult`.
 
 ## Phase 12 — Error handling and observability
 
-**Status:** [ ]
+**Status:** [x]
 
 **Goal:** Make the end-to-end pipeline trustworthy and observable. Every stage reports
 structured, secret-safe diagnostics; a failure in one source, pattern, or stage degrades
@@ -401,9 +401,11 @@ patterns, no real provider calls, no demo entry point (Phase 13).
   fake pattern still yields a report from healthy results), observer event recording, the
   PSR-3 bridge, retry behavior via a flaky fake adapter, and diagnostics contents
 
-**Implementation note:** likely delivered as two reviewable PRs under one phase —
-(A) lifecycle fix + fault isolation + diagnostics + shared redactor, then
-(B) observability seam + retry seam.
+**Implementation note:** delivered as two reviewable PRs under one phase —
+(A) lifecycle fix + fault isolation + diagnostics + shared redactor (#19), then
+(B) observability seam + retry seam (#20).
+
+**Verification note:** Phase 12 was marked done after local PHPUnit verification (113 tests, 343 assertions passing) and merge of both implementation PRs.
 
 ---
 

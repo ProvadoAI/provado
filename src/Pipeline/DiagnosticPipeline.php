@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Mquevedob\Provado\Pipeline;
 
 use Mquevedob\Provado\Config\ProvadoConfig;
+use Mquevedob\Provado\Config\SourceConfig;
 use Mquevedob\Provado\Core\TimeWindow;
 use Mquevedob\Provado\Correlation\CorrelationEngine;
 use Mquevedob\Provado\Incidents\IncidentReportBuilder;
 use Mquevedob\Provado\Patterns\DiagnosticPatternRegistry;
+use Mquevedob\Provado\Sources\SourceAdapter;
 use Mquevedob\Provado\Sources\SourceAdapterRegistry;
+use Mquevedob\Provado\Sources\SourceFetchError;
+use Mquevedob\Provado\Sources\SourceFetchResult;
 use Mquevedob\Provado\Storage\SignalStoreFactory;
 use Throwable;
 
@@ -28,11 +32,15 @@ final readonly class DiagnosticPipeline
         private SignalStoreFactory $storeFactory,
         private DiagnosticPatternRegistry $patterns,
         private IncidentReportBuilder $reportBuilder,
+        private PipelineObserver $observer = new NullPipelineObserver(),
+        private RetryPolicy $retryPolicy = new NoRetryPolicy(),
     ) {
     }
 
     public function run(ProvadoConfig $config, TimeWindow $window): PipelineResult
     {
+        $this->observer->runStarted($window);
+
         $store = $this->storeFactory->create();
 
         $signals = [];
@@ -44,7 +52,7 @@ final readonly class DiagnosticPipeline
         $fetchStart = hrtime(true);
 
         foreach ($this->adapters->enabledAdaptersFor($config) as $sourceName => $adapter) {
-            $result = $adapter->fetch($config->source($sourceName), $window);
+            $result = $this->fetchSource($adapter, $config->source($sourceName), $window);
 
             $sourceSignals = $result->signals();
             $sourceErrors = $result->errors();
@@ -62,12 +70,15 @@ final readonly class DiagnosticPipeline
                 }
             }
 
-            $sources[] = new SourceFetchSummary(
+            $summary = new SourceFetchSummary(
                 sourceName: $sourceName,
                 signalCount: count($sourceSignals),
                 errorCount: count($sourceErrors),
                 retryableErrorCount: $retryableErrors,
             );
+
+            $sources[] = $summary;
+            $this->observer->sourceFetched($summary);
         }
 
         $store->saveMany($signals);
@@ -78,13 +89,16 @@ final readonly class DiagnosticPipeline
 
         try {
             $groups = (new CorrelationEngine($store))->correlate($window);
+            $this->observer->correlationCompleted(count($groups));
         } catch (Throwable $exception) {
-            $stageErrors[] = new PipelineError(
+            $error = new PipelineError(
                 stage: 'correlation',
                 message: 'Correlation failed.',
                 code: 'correlation_failed',
                 context: ['reason' => $exception->getMessage()],
             );
+            $stageErrors[] = $error;
+            $this->observer->stageFailed($error);
         }
 
         $durations['correlation'] = $this->elapsedMs($correlationStart);
@@ -105,11 +119,15 @@ final readonly class DiagnosticPipeline
                     $evaluation = $pattern->evaluate($group);
                     $patternsEvaluated++;
 
-                    foreach ($evaluation->findings() as $finding) {
+                    $patternFindings = $evaluation->findings();
+
+                    foreach ($patternFindings as $finding) {
                         $findings[] = $finding;
                     }
+
+                    $this->observer->patternEvaluated($patternId, count($patternFindings));
                 } catch (Throwable $exception) {
-                    $stageErrors[] = new PipelineError(
+                    $error = new PipelineError(
                         stage: 'pattern_evaluation',
                         message: 'Diagnostic pattern evaluation failed.',
                         code: 'pattern_failed',
@@ -118,6 +136,8 @@ final readonly class DiagnosticPipeline
                             'reason' => $exception->getMessage(),
                         ],
                     );
+                    $stageErrors[] = $error;
+                    $this->observer->stageFailed($error);
                 }
             }
         }
@@ -130,12 +150,14 @@ final readonly class DiagnosticPipeline
         try {
             $report = $this->reportBuilder->build($findings);
         } catch (Throwable $exception) {
-            $stageErrors[] = new PipelineError(
+            $error = new PipelineError(
                 stage: 'report',
                 message: 'Incident report building failed.',
                 code: 'report_failed',
                 context: ['reason' => $exception->getMessage()],
             );
+            $stageErrors[] = $error;
+            $this->observer->stageFailed($error);
         }
 
         $durations['report'] = $this->elapsedMs($reportStart);
@@ -151,12 +173,58 @@ final readonly class DiagnosticPipeline
             stageDurationsMs: $durations,
         );
 
+        $this->observer->runCompleted($diagnostics);
+
         return new PipelineResult(
             report: $report,
             diagnostics: $diagnostics,
             errors: $errors,
             stageErrors: $stageErrors,
         );
+    }
+
+    /**
+     * Fetches a source, retrying while it returns retryable errors and the
+     * retry policy still permits attempts. A thrown adapter error is converted
+     * into a non-retryable fetch error so one source cannot abort the run.
+     */
+    private function fetchSource(SourceAdapter $adapter, SourceConfig $config, TimeWindow $window): SourceFetchResult
+    {
+        $maxAttempts = $this->retryPolicy->maxAttempts();
+        $attempt = 1;
+
+        try {
+            $result = $adapter->fetch($config, $window);
+
+            while ($attempt < $maxAttempts && $this->hasRetryableError($result)) {
+                $attempt++;
+                $this->observer->sourceRetried($config->name, $attempt);
+                $result = $adapter->fetch($config, $window);
+            }
+
+            return $result;
+        } catch (Throwable $exception) {
+            return SourceFetchResult::empty()->withErrors([
+                new SourceFetchError(
+                    sourceName: $config->name,
+                    message: 'Source fetch failed.',
+                    code: 'fetch_failed',
+                    retryable: false,
+                    context: ['reason' => $exception->getMessage()],
+                ),
+            ]);
+        }
+    }
+
+    private function hasRetryableError(SourceFetchResult $result): bool
+    {
+        foreach ($result->errors() as $error) {
+            if ($error->retryable === true) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function elapsedMs(int $startNanoseconds): float

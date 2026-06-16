@@ -362,6 +362,51 @@ incident report → return a structured `PipelineResult`.
 
 ---
 
+## Phase 12 — Error handling and observability
+
+**Status:** [ ]
+
+**Goal:** Make the end-to-end pipeline trustworthy and observable. Every stage reports
+structured, secret-safe diagnostics; a failure in one source, pattern, or stage degrades
+gracefully instead of aborting the run; and a run is self-contained. No new sources or
+patterns, no real provider calls, no demo entry point (Phase 13).
+
+**Design decisions (agreed):**
+
+- Logging seam: a custom `PipelineObserver` interface as the core seam **plus** a PSR-3
+  (`psr/log`) bridge implementation.
+- Retry: a minimal `RetryPolicy` seam now (default no-retry), acting on the existing
+  `SourceFetchError::$retryable` flag.
+- Run lifecycle: the pipeline builds a **fresh working store per run**, fixing the
+  cross-run statefulness gap found in the Phase 11 review.
+
+**Deliverables:**
+
+- Self-contained `DiagnosticPipeline::run()`: a fresh working `SignalStore` per run via an
+  injected store factory (default `InMemorySignalStore`), so runs are idempotent and
+  `signalCount` matches the correlation input
+- Stage-level fault isolation around correlation, pattern evaluation, and report building,
+  capturing failures as a structured `PipelineError` (stage, message, code, redacted context)
+  so the run continues with healthy results
+- Shared `ContextRedactor` extracted and reused by `SourceFetchError`, `IncidentReport`, and
+  `PipelineError`, removing duplicated redaction logic
+- `PipelineDiagnostics` value object on the result: per-source counts (signals, errors,
+  retryable), groups formed, patterns matched/evaluated, findings, report produced, and
+  per-stage timings — all secret-safe
+- `PipelineObserver` interface with typed stage events, a `NullPipelineObserver` default, an
+  `InMemoryPipelineObserver` for tests, and a `PsrLoggerObserver` PSR-3 bridge
+- `RetryPolicy` interface with a `NoRetryPolicy` default; the fetch stage retries up to the
+  policy's limit on retryable failures
+- PHPUnit coverage for run idempotency across repeated runs, stage fault isolation (a failing
+  fake pattern still yields a report from healthy results), observer event recording, the
+  PSR-3 bridge, retry behavior via a flaky fake adapter, and diagnostics contents
+
+**Implementation note:** likely delivered as two reviewable PRs under one phase —
+(A) lifecycle fix + fault isolation + diagnostics + shared redactor, then
+(B) observability seam + retry seam.
+
+---
+
 ## Deferred on purpose
 
 These are intentionally not part of the first Alpha build:

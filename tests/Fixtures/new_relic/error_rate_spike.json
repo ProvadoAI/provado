@@ -6,6 +6,9 @@
   "application": {
     "name": "checkout-api"
   },
+  "entities": {
+    "store": "default"
+  },
   "metrics": {
     "error_rate": 0.084,
     "baseline_error_rate": 0.012,

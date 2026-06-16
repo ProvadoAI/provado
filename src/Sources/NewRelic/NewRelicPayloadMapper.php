@@ -27,6 +27,7 @@ final readonly class NewRelicPayloadMapper
         $timestamp = $this->timestamp($this->stringValue($payload, 'timestamp'));
         $applicationName = $this->nestedStringValue($payload, 'application', 'name');
         $transactionName = $this->optionalNestedStringValue($payload, 'transaction', 'name');
+        $storeName = $this->optionalNestedStringValue($payload, 'entities', 'store');
         $metrics = $this->metrics($payload);
 
         return new Signal(
@@ -35,7 +36,7 @@ final readonly class NewRelicPayloadMapper
             type: new SignalType($eventType),
             timestamp: $timestamp,
             severity: $severity,
-            entityReferences: $this->entityReferences($applicationName, $transactionName),
+            entityReferences: $this->entityReferences($applicationName, $transactionName, $storeName),
             attributes: $this->attributes($metrics),
             rawPayloadReference: new RawPayloadReference($fixtureId, 'tests/Fixtures/new_relic/'.$fixtureId.'.json'),
         );
@@ -44,12 +45,16 @@ final readonly class NewRelicPayloadMapper
     /**
      * @return list<EntityReference>
      */
-    private function entityReferences(string $applicationName, ?string $transactionName): array
+    private function entityReferences(string $applicationName, ?string $transactionName, ?string $storeName): array
     {
         $references = [new EntityReference('service', $applicationName)];
 
         if ($transactionName !== null) {
             $references[] = new EntityReference('transaction', $transactionName);
+        }
+
+        if ($storeName !== null) {
+            $references[] = new EntityReference('store', $storeName);
         }
 
         return $references;

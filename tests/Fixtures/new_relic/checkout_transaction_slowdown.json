@@ -9,6 +9,9 @@
   "transaction": {
     "name": "WebTransaction/Checkout/SubmitOrder"
   },
+  "entities": {
+    "store": "default"
+  },
   "metrics": {
     "duration_ms": 5200,
     "baseline_duration_ms": 900,

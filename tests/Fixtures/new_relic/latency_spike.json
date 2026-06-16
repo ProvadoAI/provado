@@ -6,6 +6,9 @@
   "application": {
     "name": "checkout-api"
   },
+  "entities": {
+    "store": "default"
+  },
   "metrics": {
     "duration_ms": 2450,
     "baseline_duration_ms": 650,

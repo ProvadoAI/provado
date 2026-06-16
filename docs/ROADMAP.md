@@ -46,7 +46,7 @@ The first working Alpha must be fully demonstrable with Tier 0-style fixture dat
 | Phase 8 | [x] | Diagnostic pattern interface |
 | Phase 9 | [x] | First diagnostic pattern |
 | Phase 10 | [x] | Incident output |
-| Phase 11 | [ ] | Pipeline orchestration |
+| Phase 11 | [~] | Pipeline orchestration |
 | Phase 12 | [ ] | Error handling and observability |
 | Phase 13 | [ ] | Alpha demo flow |
 | Phase 14 | [ ] | Source integration backlog |
@@ -324,6 +324,39 @@ Update docs/ROADMAP.md marking Phase 1 as done.
 - PHPUnit coverage for report id determinism, severity aggregation, validation, builder behavior, evidence redaction, recommendation deduplication, and text rendering
 
 **Verification note:** Phase 10 was marked done after local PHPUnit verification (98 tests, 274 assertions passing).
+
+---
+
+## Phase 11 — Pipeline orchestration
+
+**Status:** [~]
+
+**Goal:** Run the full Alpha loop end-to-end as a single callable flow over Tier 0
+fixture data, composing the components built in Phases 1–10 without adding new
+diagnostic capability, real provider calls, error-handling/observability (Phase 12),
+or a demo entry point (Phase 13).
+
+**Flow:**
+
+`ProvadoConfig + TimeWindow` → resolve enabled adapters → fetch/normalize signals →
+store → correlate → evaluate matching diagnostic patterns → build one aggregated
+incident report → return a structured `PipelineResult`.
+
+**Deliverables:**
+
+- `DiagnosticPipeline` under `src/Pipeline/` with a single `run(ProvadoConfig, TimeWindow): PipelineResult`
+  method that owns the `SignalStore` and builds the `CorrelationEngine` over that same store
+- `PipelineResult` immutable value object exposing the optional `IncidentReport` plus run
+  metadata (signals fetched, correlation-group count, aggregated source fetch errors)
+- One aggregated incident report per run (matching `IncidentReportBuilder`), not one per group
+- Source fetch errors are collected into the result, not fatal — the run continues with the
+  signals it did obtain (minimal only; retries/logging deferred to Phase 12)
+- Shared-entity fix so Tier 0 sources actually correlate: the New Relic mapper emits a
+  `store` entity (when present in the payload) so New Relic and Adobe Commerce signals join
+  on the same store, enabling the checkout-degradation pattern to fire end-to-end
+- PHPUnit coverage running the full loop on New Relic + Adobe Commerce fixtures with no
+  credentials and asserting a populated incident report, plus the no-signal (null report)
+  and source-error-collected cases
 
 ---
 

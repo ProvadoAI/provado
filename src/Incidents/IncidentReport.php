@@ -7,23 +7,10 @@ namespace Mquevedob\Provado\Incidents;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use Mquevedob\Provado\Patterns\DiagnosticFinding;
+use Mquevedob\Provado\Support\ContextRedactor;
 
 final readonly class IncidentReport
 {
-    private const REDACTED = '[redacted]';
-
-    private const SECRET_KEY_FRAGMENTS = [
-        'api_key',
-        'apikey',
-        'access_token',
-        'authorization',
-        'bearer',
-        'credential',
-        'password',
-        'secret',
-        'token',
-    ];
-
     /**
      * @var list<DiagnosticFinding>
      */
@@ -63,7 +50,7 @@ final readonly class IncidentReport
         }
 
         $this->findings = $this->validateFindings($findings);
-        $this->evidence = $this->sanitizeEvidence($evidence);
+        $this->evidence = (new ContextRedactor())->redact($evidence);
         $this->recommendedNextChecks = $this->validateRecommendedNextChecks($recommendedNextChecks);
     }
 
@@ -103,45 +90,5 @@ final readonly class IncidentReport
         }
 
         return $validated;
-    }
-
-    /**
-     * @param array<mixed> $evidence
-     * @return array<mixed>
-     */
-    private function sanitizeEvidence(array $evidence): array
-    {
-        $sanitized = [];
-
-        foreach ($evidence as $name => $value) {
-            if (is_string($name) && $this->isSecretKey($name)) {
-                $sanitized[$name] = self::REDACTED;
-
-                continue;
-            }
-
-            if (is_array($value)) {
-                $sanitized[$name] = $this->sanitizeEvidence($value);
-
-                continue;
-            }
-
-            $sanitized[$name] = $value;
-        }
-
-        return $sanitized;
-    }
-
-    private function isSecretKey(string $name): bool
-    {
-        $normalized = strtolower($name);
-
-        foreach (self::SECRET_KEY_FRAGMENTS as $fragment) {
-            if (str_contains($normalized, $fragment)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

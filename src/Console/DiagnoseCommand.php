@@ -73,7 +73,11 @@ class DiagnoseCommand extends Command
         $this->newLine();
 
         if ($result->report !== null) {
-            $this->line($renderer->renderText($result->report));
+            // Write the report a line at a time so each line is a distinct
+            // console write rather than one multi-line blob.
+            foreach (explode("\n", rtrim($renderer->renderText($result->report), "\n")) as $line) {
+                $this->line($line);
+            }
         } else {
             $this->info('No incident report was produced for the requested window.');
         }

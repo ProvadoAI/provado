@@ -9,6 +9,18 @@ return [
         'logging' => env('PROVADO_LOGGING_ENABLED', false),
     ],
 
+    'storage' => [
+        // Where canonical signals are stored per run: 'memory' (default,
+        // ephemeral) or 'database' (persisted via the configured connection).
+        'driver' => env('PROVADO_STORAGE_DRIVER', 'memory'),
+
+        // Database connection name for the 'database' driver (null = default).
+        'connection' => env('PROVADO_STORAGE_CONNECTION'),
+
+        // Table backing the database driver; see the package migration.
+        'table' => env('PROVADO_STORAGE_TABLE', 'provado_signals'),
+    ],
+
     'sources' => [
         'new_relic' => [
             'enabled' => env('PROVADO_NEW_RELIC_ENABLED', false),

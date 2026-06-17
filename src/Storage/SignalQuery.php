@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mquevedob\Provado\Storage;
 
 use Mquevedob\Provado\Core\EntityReference;
+use Mquevedob\Provado\Core\Signal;
 use Mquevedob\Provado\Core\SignalSeverity;
 use Mquevedob\Provado\Core\SignalSource;
 use Mquevedob\Provado\Core\SignalType;
@@ -79,5 +80,34 @@ final readonly class SignalQuery
             entity: $this->entity,
             window: $window,
         );
+    }
+
+    /**
+     * Whether a signal satisfies every filter set on this query. Shared by all
+     * SignalStore implementations so they match signals identically.
+     */
+    public function matches(Signal $signal): bool
+    {
+        if ($this->source !== null && ! $signal->source->equals($this->source)) {
+            return false;
+        }
+
+        if ($this->type !== null && ! $signal->type->equals($this->type)) {
+            return false;
+        }
+
+        if ($this->severity !== null && ! $signal->severity->equals($this->severity)) {
+            return false;
+        }
+
+        if ($this->entity !== null && ! $signal->hasEntity($this->entity)) {
+            return false;
+        }
+
+        if ($this->window !== null && ! $this->window->contains($signal->timestamp)) {
+            return false;
+        }
+
+        return true;
     }
 }

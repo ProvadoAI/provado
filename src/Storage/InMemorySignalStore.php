@@ -43,27 +43,9 @@ final class InMemorySignalStore implements SignalStore
         $matches = [];
 
         foreach ($this->signalsById as $signal) {
-            if ($query->source !== null && ! $signal->source->equals($query->source)) {
-                continue;
+            if ($query->matches($signal)) {
+                $matches[] = $signal;
             }
-
-            if ($query->type !== null && ! $signal->type->equals($query->type)) {
-                continue;
-            }
-
-            if ($query->severity !== null && ! $signal->severity->equals($query->severity)) {
-                continue;
-            }
-
-            if ($query->entity !== null && ! $signal->hasEntity($query->entity)) {
-                continue;
-            }
-
-            if ($query->window !== null && ! $query->window->contains($signal->timestamp)) {
-                continue;
-            }
-
-            $matches[] = $signal;
         }
 
         return $matches;

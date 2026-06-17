@@ -9,6 +9,7 @@ use Mquevedob\Provado\Console\DiagnoseCommand;
 use Mquevedob\Provado\Incidents\IncidentReportBuilder;
 use Mquevedob\Provado\Patterns\Checkout\CheckoutDegradationPattern;
 use Mquevedob\Provado\Patterns\DiagnosticPatternRegistry;
+use Mquevedob\Provado\Patterns\Orders\OrderOperationsBacklogPattern;
 use Mquevedob\Provado\Pipeline\DiagnosticPipeline;
 use Mquevedob\Provado\Pipeline\NoRetryPolicy;
 use Mquevedob\Provado\Pipeline\NullPipelineObserver;
@@ -85,6 +86,7 @@ class ProvadoServiceProvider extends ServiceProvider
         $this->app->singleton(DiagnosticPatternRegistry::class, static function (): DiagnosticPatternRegistry {
             return new DiagnosticPatternRegistry([
                 new CheckoutDegradationPattern(),
+                new OrderOperationsBacklogPattern(),
             ]);
         });
 

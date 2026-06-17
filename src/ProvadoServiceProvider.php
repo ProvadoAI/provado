@@ -18,6 +18,7 @@ use Mquevedob\Provado\Pipeline\RetryPolicy;
 use Mquevedob\Provado\Sources\AdobeCommerce\AdobeCommerceAdapter;
 use Mquevedob\Provado\Sources\NewRelic\NewRelicAdapter;
 use Mquevedob\Provado\Sources\SourceAdapterRegistry;
+use Mquevedob\Provado\Storage\DatabaseSignalStoreFactory;
 use Mquevedob\Provado\Storage\InMemorySignalStoreFactory;
 use Mquevedob\Provado\Storage\SignalStoreFactory;
 use Psr\Log\LoggerInterface;
@@ -65,7 +66,21 @@ class ProvadoServiceProvider extends ServiceProvider
             ]);
         });
 
-        $this->app->singleton(SignalStoreFactory::class, InMemorySignalStoreFactory::class);
+        $this->app->singleton(SignalStoreFactory::class, static function (Application $app): SignalStoreFactory {
+            $config = $app['config'];
+
+            if ($config->get('provado.storage.driver', 'memory') === 'database') {
+                $connection = $config->get('provado.storage.connection');
+
+                return new DatabaseSignalStoreFactory(
+                    $app->make('db'),
+                    is_string($connection) && trim($connection) !== '' ? $connection : null,
+                    (string) $config->get('provado.storage.table', 'provado_signals'),
+                );
+            }
+
+            return new InMemorySignalStoreFactory();
+        });
 
         $this->app->singleton(DiagnosticPatternRegistry::class, static function (): DiagnosticPatternRegistry {
             return new DiagnosticPatternRegistry([

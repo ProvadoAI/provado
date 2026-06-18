@@ -9,7 +9,7 @@ Primary source document for direction: `docs/ARCHITECTURE_DIRECTION_SOURCE.md`.
 
 | Version | Status | File |
 |---|---|---|
-| v0.2.0 | **Active** | [`docs/roadmaps/v0.2.0.md`](roadmaps/v0.2.0.md) |
+| v0.2.0 | Shipped (tag `0.2.0`) | [`docs/roadmaps/v0.2.0.md`](roadmaps/v0.2.0.md) |
 | v0.1.0 | Shipped (tag `0.1.0`) | [`docs/roadmaps/v0.1.0.md`](roadmaps/v0.1.0.md) |
 
 ## Working agreement

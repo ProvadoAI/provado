@@ -30,6 +30,42 @@ class DiagnoseCommandTest extends TestCase
             ->assertExitCode(0);
     }
 
+    public function test_demo_run_surfaces_stage_timings(): void
+    {
+        // A single substring: expectsOutputToContain consumes only one expectation
+        // per console write, and all timings land on one line.
+        $this->artisan('provado:diagnose', ['--demo' => true])
+            ->expectsOutputToContain('Stage timings: fetch=')
+            ->assertExitCode(0);
+    }
+
+    public function test_source_errors_are_surfaced_without_aborting(): void
+    {
+        // Enable New Relic pointed at the invalid fixture so the adapter emits a
+        // SourceFetchError; the run must continue and report the failure.
+        config([
+            'provado.sources.new_relic' => [
+                'enabled' => true,
+                'options' => ['account_id' => '123456', 'fixtures' => ['invalid_payload']],
+                'credentials' => ['api_key' => 'nr-key'],
+            ],
+            'provado.sources.adobe_commerce' => [
+                'enabled' => false,
+                'options' => [],
+                'credentials' => [],
+            ],
+        ]);
+
+        $this->artisan('provado:diagnose', [
+            '--from' => '2026-06-08T00:00:00+00:00',
+            '--to' => '2026-06-09T00:00:00+00:00',
+        ])
+            ->expectsOutputToContain('source error(s)')
+            ->expectsOutputToContain('[new_relic]')
+            ->expectsOutputToContain('No incident report was produced')
+            ->assertExitCode(0);
+    }
+
     public function test_run_without_enabled_sources_reports_no_incident(): void
     {
         // Default config ships both sources disabled, so the pipeline collects

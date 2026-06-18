@@ -17,8 +17,11 @@ use Mquevedob\Provado\Incidents\IncidentReportBuilder;
 use Mquevedob\Provado\Incidents\IncidentReportRenderer;
 use Mquevedob\Provado\Patterns\DiagnosticPatternRegistry;
 use Mquevedob\Provado\Pipeline\DiagnosticPipeline;
+use Mquevedob\Provado\Pipeline\PipelineDiagnostics;
+use Mquevedob\Provado\Pipeline\PipelineError;
 use Mquevedob\Provado\Pipeline\RetryPolicy;
 use Mquevedob\Provado\Sources\SourceAdapterRegistry;
+use Mquevedob\Provado\Sources\SourceFetchError;
 use Mquevedob\Provado\Storage\SignalStoreFactory;
 
 class DiagnoseCommand extends Command
@@ -82,15 +85,62 @@ class DiagnoseCommand extends Command
             $this->info('No incident report was produced for the requested window.');
         }
 
+        $this->newLine();
+        $this->renderStageTimings($result->diagnostics);
+
         if ($result->hasErrors()) {
-            $this->warn(sprintf(
-                '%d source error(s) and %d stage error(s) occurred during the run.',
-                count($result->errors),
-                count($result->stageErrors),
-            ));
+            $this->renderRunErrors($result->errors, $result->stageErrors);
         }
 
         return self::SUCCESS;
+    }
+
+    private function renderStageTimings(PipelineDiagnostics $diagnostics): void
+    {
+        if ($diagnostics->stageDurationsMs === []) {
+            return;
+        }
+
+        $timings = [];
+
+        foreach ($diagnostics->stageDurationsMs as $stage => $milliseconds) {
+            $timings[] = sprintf('%s=%.2fms', $stage, $milliseconds);
+        }
+
+        $this->line('Stage timings: ' . implode(' ', $timings));
+    }
+
+    /**
+     * Surface isolated failures so a degraded run is visible without aborting.
+     *
+     * @param list<SourceFetchError> $sourceErrors
+     * @param list<PipelineError> $stageErrors
+     */
+    private function renderRunErrors(array $sourceErrors, array $stageErrors): void
+    {
+        $this->newLine();
+
+        if ($sourceErrors !== []) {
+            $this->warn(sprintf('%d source error(s) - the run continued:', count($sourceErrors)));
+
+            foreach ($sourceErrors as $error) {
+                $this->line(sprintf(
+                    '  - [%s] %s (%s): %s',
+                    $error->sourceName,
+                    $error->code ?? 'error',
+                    $error->retryable === true ? 'retryable' : 'non-retryable',
+                    $error->message,
+                ));
+            }
+        }
+
+        if ($stageErrors !== []) {
+            $this->warn(sprintf('%d stage error(s) - isolated, the run continued:', count($stageErrors)));
+
+            foreach ($stageErrors as $error) {
+                $this->line(sprintf('  - [%s] %s: %s', $error->stage, $error->code ?? 'error', $error->message));
+            }
+        }
     }
 
     private function resolveWindow(bool $demo): TimeWindow

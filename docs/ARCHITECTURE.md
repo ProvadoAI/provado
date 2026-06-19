@@ -17,7 +17,7 @@ over the correlated groups, and produces a single incident report. Everything is
 Laravel's container and runnable from one artisan command.
 
 ```mermaid
-flowchart TD
+flowchart LR
     config["config('provado')"] --> registry["SourceAdapterRegistry<br/>(enabled sources)"]
     registry -->|fetch| signals["canonical Signals"]
     signals --> store["SignalStore (per run)"]

@@ -16,25 +16,19 @@ single canonical model, correlates related signals, runs deterministic diagnosti
 over the correlated groups, and produces a single incident report. Everything is wired into
 Laravel's container and runnable from one artisan command.
 
-```
-config('provado')
-      │
-      ▼
-SourceAdapterRegistry ──fetch──▶ canonical Signals ──▶ SignalStore (per run)
-      │  (enabled sources)                                   │
-      │                                                      ▼
-      │                                            CorrelationEngine
-      │                                                      │
-      │                                            CorrelationGroups
-      │                                                      ▼
-      │                                      DiagnosticPatternRegistry
-      │                                                      │
-      │                                            DiagnosticFindings
-      │                                                      ▼
-      └────────────────────────────────────▶  IncidentReportBuilder ──▶ IncidentReport
-                                                                              │
-                                                                              ▼
-                                                              IncidentReportRenderer / report
+```mermaid
+flowchart TD
+    config["config('provado')"] --> registry["SourceAdapterRegistry<br/>(enabled sources)"]
+    registry -->|fetch| signals["canonical Signals"]
+    signals --> store["SignalStore (per run)"]
+    store --> correlation["CorrelationEngine"]
+    correlation --> groups["CorrelationGroups"]
+    groups --> patterns["DiagnosticPatternRegistry"]
+    patterns --> findings["DiagnosticFindings"]
+    findings --> builder["IncidentReportBuilder"]
+    config --> builder
+    builder --> report["IncidentReport"]
+    report --> renderer["IncidentReportRenderer / report"]
 ```
 
 The orchestration of that flow lives in `DiagnosticPipeline::run()`.

@@ -1,0 +1,7 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body_fixture": "new_relic/latency_spike"
+}

@@ -1,0 +1,7 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body_fixture": "adobe_commerce/checkout_failure_rate"
+}

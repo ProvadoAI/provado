@@ -213,6 +213,68 @@ class CorrelationTest extends TestCase
         $this->assertSame([], $groups);
     }
 
+    public function test_time_proximity_joins_entity_disjoint_signals_within_threshold(): void
+    {
+        $first = $this->signal('signal-1', entityReferences: [new EntityReference('service', 'checkout')], timestamp: new DateTimeImmutable('2026-06-08T12:00:00+00:00'));
+        $second = $this->signal('signal-2', entityReferences: [new EntityReference('service', 'catalog')], timestamp: new DateTimeImmutable('2026-06-08T12:01:00+00:00'));
+        $engine = new CorrelationEngine($this->storeWithSignals([$first, $second]));
+
+        $groups = $engine->correlate(
+            $this->window(),
+            CorrelationCriteria::all()->withTimeProximity(120),
+        );
+
+        $this->assertCount(1, $groups);
+        $this->assertSame(['signal-1', 'signal-2'], $this->signalIds($groups[0]->signals));
+    }
+
+    public function test_time_proximity_does_not_join_signals_beyond_threshold(): void
+    {
+        $first = $this->signal('signal-1', entityReferences: [new EntityReference('service', 'checkout')], timestamp: new DateTimeImmutable('2026-06-08T12:00:00+00:00'));
+        $second = $this->signal('signal-2', entityReferences: [new EntityReference('service', 'catalog')], timestamp: new DateTimeImmutable('2026-06-08T12:05:00+00:00'));
+        $engine = new CorrelationEngine($this->storeWithSignals([$first, $second]));
+
+        $groups = $engine->correlate(
+            $this->window(),
+            CorrelationCriteria::all()->withTimeProximity(120),
+        );
+
+        $this->assertSame([], $groups);
+    }
+
+    public function test_shared_entity_join_still_applies_when_time_proximity_is_enabled(): void
+    {
+        $shared = new EntityReference('service', 'checkout');
+        $first = $this->signal('signal-1', entityReferences: [$shared], timestamp: new DateTimeImmutable('2026-06-08T12:00:00+00:00'));
+        $second = $this->signal('signal-2', entityReferences: [$shared], timestamp: new DateTimeImmutable('2026-06-08T12:05:00+00:00'));
+        $engine = new CorrelationEngine($this->storeWithSignals([$first, $second]));
+
+        $groups = $engine->correlate(
+            $this->window(),
+            CorrelationCriteria::all()->withTimeProximity(60),
+        );
+
+        $this->assertCount(1, $groups);
+        $this->assertSame(['signal-1', 'signal-2'], $this->signalIds($groups[0]->signals));
+    }
+
+    public function test_time_proximity_is_disabled_by_default(): void
+    {
+        $first = $this->signal('signal-1', entityReferences: [new EntityReference('service', 'checkout')], timestamp: new DateTimeImmutable('2026-06-08T12:00:00+00:00'));
+        $second = $this->signal('signal-2', entityReferences: [new EntityReference('service', 'catalog')], timestamp: new DateTimeImmutable('2026-06-08T12:00:30+00:00'));
+        $engine = new CorrelationEngine($this->storeWithSignals([$first, $second]));
+
+        $this->assertSame([], $engine->correlate($this->window()));
+    }
+
+    public function test_time_proximity_must_be_positive(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Correlation time proximity must be greater than zero seconds.');
+
+        CorrelationCriteria::all()->withTimeProximity(0);
+    }
+
     public function test_empty_signal_group_rejected(): void
     {
         $this->expectException(InvalidArgumentException::class);

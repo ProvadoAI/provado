@@ -42,7 +42,7 @@ final readonly class CorrelationEngine
             $query = $query->withSeverity($criteria->severity);
         }
 
-        return $this->groupsFor($this->signals->query($query));
+        return $this->groupsFor($this->signals->query($query), $criteria->timeProximitySeconds);
     }
 
     private function effectiveWindow(TimeWindow $requestedWindow, ?TimeWindow $criteriaWindow): ?TimeWindow
@@ -69,7 +69,7 @@ final readonly class CorrelationEngine
      * @param list<Signal> $signals
      * @return list<CorrelationGroup>
      */
-    private function groupsFor(array $signals): array
+    private function groupsFor(array $signals, ?int $timeProximitySeconds): array
     {
         $visitedSignalIds = [];
         $groups = [];
@@ -79,7 +79,7 @@ final readonly class CorrelationEngine
                 continue;
             }
 
-            $groupSignals = $this->connectedSignals($signal, $signals);
+            $groupSignals = $this->connectedSignals($signal, $signals, $timeProximitySeconds);
 
             foreach ($groupSignals as $groupSignal) {
                 $visitedSignalIds[$groupSignal->id->value] = true;
@@ -97,7 +97,7 @@ final readonly class CorrelationEngine
      * @param list<Signal> $signals
      * @return list<Signal>
      */
-    private function connectedSignals(Signal $root, array $signals): array
+    private function connectedSignals(Signal $root, array $signals, ?int $timeProximitySeconds): array
     {
         $connectedSignals = [];
         $visitedSignalIds = [];
@@ -118,13 +118,27 @@ final readonly class CorrelationEngine
                     continue;
                 }
 
-                if ($this->signalsShareEntity($signal, $candidate)) {
+                if ($this->signalsConnected($signal, $candidate, $timeProximitySeconds)) {
                     $queue[] = $candidate;
                 }
             }
         }
 
         return $connectedSignals;
+    }
+
+    /**
+     * Two signals are connected when they share an entity, or — when time
+     * proximity is enabled — when their timestamps fall within the threshold.
+     */
+    private function signalsConnected(Signal $first, Signal $second, ?int $timeProximitySeconds): bool
+    {
+        if ($this->signalsShareEntity($first, $second)) {
+            return true;
+        }
+
+        return $timeProximitySeconds !== null
+            && $this->signalsWithinProximity($first, $second, $timeProximitySeconds);
     }
 
     private function signalsShareEntity(Signal $first, Signal $second): bool
@@ -136,5 +150,12 @@ final readonly class CorrelationEngine
         }
 
         return false;
+    }
+
+    private function signalsWithinProximity(Signal $first, Signal $second, int $timeProximitySeconds): bool
+    {
+        $secondsApart = abs($first->timestamp->getTimestamp() - $second->timestamp->getTimestamp());
+
+        return $secondsApart <= $timeProximitySeconds;
     }
 }

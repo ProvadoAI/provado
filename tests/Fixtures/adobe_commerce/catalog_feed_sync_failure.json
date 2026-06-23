@@ -1,0 +1,13 @@
+{
+  "id": "catalog_feed_sync_failure",
+  "event_type": "catalog_feed_sync_failure",
+  "timestamp": "2026-06-08T12:08:00+00:00",
+  "severity": "error",
+  "entities": {
+    "store": "default",
+    "feed": "product_catalog"
+  },
+  "metrics": {
+    "feed_error_count": 145
+  }
+}

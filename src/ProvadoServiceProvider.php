@@ -10,6 +10,7 @@ use Mquevedob\Provado\Console\DiagnoseCommand;
 use Mquevedob\Provado\Http\HttpClient;
 use Mquevedob\Provado\Http\LaravelHttpClient;
 use Mquevedob\Provado\Incidents\IncidentReportBuilder;
+use Mquevedob\Provado\Patterns\Catalog\CatalogFeedSyncFailurePattern;
 use Mquevedob\Provado\Patterns\Checkout\CheckoutDegradationPattern;
 use Mquevedob\Provado\Patterns\DiagnosticPatternRegistry;
 use Mquevedob\Provado\Patterns\Orders\OrderOperationsBacklogPattern;
@@ -102,6 +103,7 @@ class ProvadoServiceProvider extends ServiceProvider
                 new CheckoutDegradationPattern(),
                 new OrderOperationsBacklogPattern(),
                 new PaymentConfigRegressionPattern(),
+                new CatalogFeedSyncFailurePattern(),
             ]);
         });
 

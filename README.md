@@ -16,7 +16,7 @@ artisan command.
 ## Requirements
 
 - PHP 8.2+
-- Laravel 11 or 12 (`illuminate/support` ^11 | ^12)
+- Laravel 11 or 12 (`illuminate/support` and `illuminate/http` ^11 | ^12)
 
 ## Installation
 
@@ -51,6 +51,14 @@ return [
         'logging' => env('PROVADO_LOGGING_ENABLED', false),
     ],
 
+    'http' => [
+        // Default timeouts (seconds) for outbound source-client requests. The
+        // default HttpClient makes no call until a source adapter invokes it,
+        // so these enable no real source on their own.
+        'timeout' => env('PROVADO_HTTP_TIMEOUT', 10),
+        'connect_timeout' => env('PROVADO_HTTP_CONNECT_TIMEOUT', 5),
+    ],
+
     'storage' => [
         // 'memory' (default, ephemeral) or 'database' (persisted per run).
         'driver' => env('PROVADO_STORAGE_DRIVER', 'memory'),
@@ -77,8 +85,11 @@ Notes:
 
 - Sources ship **disabled** by default; enabling a source requires its options and credentials.
 - Credentials are never rendered in serialized config output (redacted).
-- In Alpha, adapters are fixture-backed regardless of credentials — see the roadmap for the
-  live-client plan.
+- Adapters select their client by **credential presence**: when a source's credentials are
+  configured and a credentialed client is wired, the adapter uses it; otherwise it falls back to
+  the fixture client. The real provider clients are still deferred, so in Alpha the fixture path
+  is taken and no outbound calls are made. The `http` timeouts above apply to those clients once
+  they ship — see the roadmap for the live-client plan.
 
 ## Usage
 

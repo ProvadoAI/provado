@@ -1,0 +1,14 @@
+{
+  "id": "payment_config_change",
+  "event_type": "payment_config_change",
+  "timestamp": "2026-06-08T12:01:00+00:00",
+  "severity": "warning",
+  "entities": {
+    "store": "default",
+    "checkout": "onepage",
+    "payment": "braintree"
+  },
+  "metrics": {
+    "payment_decline_rate": 0.41
+  }
+}

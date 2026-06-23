@@ -13,6 +13,7 @@ use Mquevedob\Provado\Incidents\IncidentReportBuilder;
 use Mquevedob\Provado\Patterns\Checkout\CheckoutDegradationPattern;
 use Mquevedob\Provado\Patterns\DiagnosticPatternRegistry;
 use Mquevedob\Provado\Patterns\Orders\OrderOperationsBacklogPattern;
+use Mquevedob\Provado\Patterns\Payments\PaymentConfigRegressionPattern;
 use Mquevedob\Provado\Pipeline\DiagnosticPipeline;
 use Mquevedob\Provado\Pipeline\NoRetryPolicy;
 use Mquevedob\Provado\Pipeline\NullPipelineObserver;
@@ -100,6 +101,7 @@ class ProvadoServiceProvider extends ServiceProvider
             return new DiagnosticPatternRegistry([
                 new CheckoutDegradationPattern(),
                 new OrderOperationsBacklogPattern(),
+                new PaymentConfigRegressionPattern(),
             ]);
         });
 

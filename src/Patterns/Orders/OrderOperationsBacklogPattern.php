@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace Mquevedob\Provado\Patterns\Orders;
 
-use Mquevedob\Provado\Core\EntityReference;
 use Mquevedob\Provado\Core\Signal;
-use Mquevedob\Provado\Core\SignalSeverity;
 use Mquevedob\Provado\Correlation\CorrelationGroup;
+use Mquevedob\Provado\Patterns\DiagnosticEvidence;
 use Mquevedob\Provado\Patterns\DiagnosticFinding;
 use Mquevedob\Provado\Patterns\DiagnosticFindingId;
-use Mquevedob\Provado\Patterns\DiagnosticFindingSeverity;
 use Mquevedob\Provado\Patterns\DiagnosticPattern;
 use Mquevedob\Provado\Patterns\PatternEvaluationResult;
 
@@ -22,6 +20,8 @@ use Mquevedob\Provado\Patterns\PatternEvaluationResult;
  */
 final readonly class OrderOperationsBacklogPattern implements DiagnosticPattern
 {
+    use DiagnosticEvidence;
+
     private const ADOBE_COMMERCE_SOURCE = 'adobe_commerce';
 
     private const ORDER_SYNC_BACKLOG_TYPE = 'order_sync_backlog';
@@ -101,97 +101,11 @@ final readonly class OrderOperationsBacklogPattern implements DiagnosticPattern
             && $signal->type->value === $type;
     }
 
-    private function findingSeverity(SignalSeverity $highestSignalSeverity): DiagnosticFindingSeverity
-    {
-        return match ($highestSignalSeverity->value) {
-            'critical' => DiagnosticFindingSeverity::critical(),
-            'error' => DiagnosticFindingSeverity::error(),
-            default => DiagnosticFindingSeverity::warning(),
-        };
-    }
-
     /**
      * @return array<string, mixed>
      */
     private function evidence(CorrelationGroup $group): array
     {
-        $evidence = [
-            'correlation_id' => $group->id->value,
-            'involved_sources' => $this->sourceValues($group),
-            'involved_types' => $this->typeValues($group),
-            'shared_entities' => $this->entityValues($group->sharedEntities()),
-            'starts_at' => $group->startsAt()->format(DATE_ATOM),
-            'ends_at' => $group->endsAt()->format(DATE_ATOM),
-            'highest_signal_severity' => $group->highestSeverity()->value,
-        ];
-
-        foreach (self::BACKLOG_METRICS as $metricName) {
-            $metricValue = $this->firstMetricValue($group, $metricName);
-
-            if ($metricValue !== null) {
-                $evidence[$metricName] = $metricValue;
-            }
-        }
-
-        return $evidence;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function sourceValues(CorrelationGroup $group): array
-    {
-        $sources = [];
-
-        foreach ($group->involvedSources() as $source) {
-            $sources[] = $source->value;
-        }
-
-        return $sources;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function typeValues(CorrelationGroup $group): array
-    {
-        $types = [];
-
-        foreach ($group->involvedTypes() as $type) {
-            $types[] = $type->value;
-        }
-
-        return $types;
-    }
-
-    /**
-     * @param list<EntityReference> $entityReferences
-     * @return list<array{type: string, id: string}>
-     */
-    private function entityValues(array $entityReferences): array
-    {
-        $entities = [];
-
-        foreach ($entityReferences as $entityReference) {
-            $entities[] = [
-                'type' => $entityReference->type,
-                'id' => $entityReference->id,
-            ];
-        }
-
-        return $entities;
-    }
-
-    private function firstMetricValue(CorrelationGroup $group, string $metricName): int|float|null
-    {
-        foreach ($group->signals as $signal) {
-            $metricValue = $signal->attributes[$metricName] ?? null;
-
-            if (is_int($metricValue) || is_float($metricValue)) {
-                return $metricValue;
-            }
-        }
-
-        return null;
+        return $this->withMetricEvidence($this->baseEvidence($group), $group, self::BACKLOG_METRICS);
     }
 }

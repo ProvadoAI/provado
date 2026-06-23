@@ -48,7 +48,7 @@ final readonly class AdobeCommercePayloadMapper
     {
         $references = [];
 
-        foreach (['store', 'checkout', 'queue', 'sku', 'indexer'] as $entityType) {
+        foreach (['store', 'checkout', 'queue', 'sku', 'indexer', 'payment'] as $entityType) {
             $entityId = $entities[$entityType] ?? null;
 
             if ($entityId === null) {
@@ -77,7 +77,7 @@ final readonly class AdobeCommercePayloadMapper
     {
         $attributes = [];
 
-        foreach (['failure_rate', 'backlog_count', 'drift_count', 'stuck_duration_minutes'] as $metricName) {
+        foreach (['failure_rate', 'backlog_count', 'drift_count', 'stuck_duration_minutes', 'payment_decline_rate'] as $metricName) {
             $metricValue = $metrics[$metricName] ?? null;
 
             if ($metricValue === null) {

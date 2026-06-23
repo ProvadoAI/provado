@@ -167,6 +167,52 @@ class IncidentReportTest extends TestCase
         $this->assertStringNotContainsString('nested-secret', $encodedEvidence);
     }
 
+    public function test_evidence_is_ordered_by_finding_severity_descending(): void
+    {
+        $warningFinding = $this->finding('finding-1', 'Warning finding', severity: DiagnosticFindingSeverity::warning());
+        $criticalFinding = $this->finding('finding-2', 'Critical finding', severity: DiagnosticFindingSeverity::critical());
+        $errorFinding = $this->finding('finding-3', 'Error finding', severity: DiagnosticFindingSeverity::error());
+
+        $report = (new IncidentReportBuilder())->build(
+            [$warningFinding, $criticalFinding, $errorFinding],
+            new DateTimeImmutable('2026-06-09T10:00:00+00:00'),
+        );
+
+        $this->assertSame(
+            ['finding-2', 'finding-3', 'finding-1'],
+            array_column($report->evidence, 'finding_id'),
+        );
+    }
+
+    public function test_evidence_is_deduplicated_by_finding_id(): void
+    {
+        $finding = $this->finding('finding-1', 'Checkout degradation detected');
+
+        $report = (new IncidentReportBuilder())->build(
+            [$finding, $finding],
+            new DateTimeImmutable('2026-06-09T10:00:00+00:00'),
+        );
+
+        $this->assertCount(1, $report->evidence);
+        $this->assertSame('finding-1', $report->evidence[0]['finding_id']);
+    }
+
+    public function test_evidence_keeps_original_order_for_equal_severity(): void
+    {
+        $first = $this->finding('finding-1', 'First finding', severity: DiagnosticFindingSeverity::error());
+        $second = $this->finding('finding-2', 'Second finding', severity: DiagnosticFindingSeverity::error());
+
+        $report = (new IncidentReportBuilder())->build(
+            [$first, $second],
+            new DateTimeImmutable('2026-06-09T10:00:00+00:00'),
+        );
+
+        $this->assertSame(
+            ['finding-1', 'finding-2'],
+            array_column($report->evidence, 'finding_id'),
+        );
+    }
+
     public function test_incident_report_renderer_outputs_deterministic_readable_text(): void
     {
         $finding = $this->finding(

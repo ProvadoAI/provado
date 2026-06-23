@@ -7,6 +7,7 @@ namespace Mquevedob\Provado\Incidents;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use Mquevedob\Provado\Patterns\DiagnosticFinding;
+use Mquevedob\Provado\Patterns\DiagnosticFindingSeverity;
 
 final readonly class IncidentReportBuilder
 {
@@ -83,14 +84,38 @@ final readonly class IncidentReportBuilder
     }
 
     /**
+     * Aggregate per-finding evidence, de-duplicated by finding id and ordered
+     * by finding severity (most severe first) so the report leads with the
+     * highest-impact evidence. Ties keep their original order (stable sort).
+     *
      * @param list<DiagnosticFinding> $findings
      * @return list<array{finding_id: string, title: string, evidence: array<mixed>}>
      */
     private function evidence(array $findings): array
     {
-        $evidence = [];
+        $uniqueFindings = [];
+        $seen = [];
 
         foreach ($findings as $finding) {
+            $findingId = $finding->id->value;
+
+            if (isset($seen[$findingId])) {
+                continue;
+            }
+
+            $seen[$findingId] = true;
+            $uniqueFindings[] = $finding;
+        }
+
+        usort(
+            $uniqueFindings,
+            fn (DiagnosticFinding $a, DiagnosticFinding $b): int =>
+                $this->severityRank($b->severity) <=> $this->severityRank($a->severity),
+        );
+
+        $evidence = [];
+
+        foreach ($uniqueFindings as $finding) {
             $evidence[] = [
                 'finding_id' => $finding->id->value,
                 'title' => $finding->title,
@@ -99,6 +124,16 @@ final readonly class IncidentReportBuilder
         }
 
         return $evidence;
+    }
+
+    private function severityRank(DiagnosticFindingSeverity $severity): int
+    {
+        return match ($severity->value) {
+            'info' => 10,
+            'warning' => 20,
+            'error' => 30,
+            'critical' => 40,
+        };
     }
 
     /**

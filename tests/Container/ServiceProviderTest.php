@@ -8,6 +8,8 @@ use DateTimeImmutable;
 use Illuminate\Contracts\Foundation\Application;
 use Mquevedob\Provado\Config\ProvadoConfig;
 use Mquevedob\Provado\Core\TimeWindow;
+use Mquevedob\Provado\Http\HttpClient;
+use Mquevedob\Provado\Http\LaravelHttpClient;
 use Mquevedob\Provado\Incidents\IncidentReportBuilder;
 use Mquevedob\Provado\Patterns\DiagnosticPatternRegistry;
 use Mquevedob\Provado\Pipeline\DiagnosticPipeline;
@@ -52,6 +54,12 @@ class ServiceProviderTest extends TestCase
     public function test_signal_store_factory_resolves_to_in_memory_default(): void
     {
         $this->assertInstanceOf(InMemorySignalStoreFactory::class, $this->app->make(SignalStoreFactory::class));
+    }
+
+    public function test_http_client_resolves_to_the_laravel_implementation_as_a_singleton(): void
+    {
+        $this->assertInstanceOf(LaravelHttpClient::class, $this->app->make(HttpClient::class));
+        $this->assertSame($this->app->make(HttpClient::class), $this->app->make(HttpClient::class));
     }
 
     public function test_retry_policy_defaults_to_no_retry(): void

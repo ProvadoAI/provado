@@ -9,6 +9,15 @@ return [
         'logging' => env('PROVADO_LOGGING_ENABLED', false),
     ],
 
+    'http' => [
+        // Default timeouts (seconds) applied to outbound source-client requests
+        // by the default HttpClient. No outbound call is made until a source
+        // adapter actually invokes the client; configuring these enables no
+        // real source on its own.
+        'timeout' => env('PROVADO_HTTP_TIMEOUT', 10),
+        'connect_timeout' => env('PROVADO_HTTP_CONNECT_TIMEOUT', 5),
+    ],
+
     'storage' => [
         // Where canonical signals are stored per run: 'memory' (default,
         // ephemeral) or 'database' (persisted via the configured connection).

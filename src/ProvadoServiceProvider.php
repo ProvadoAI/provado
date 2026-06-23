@@ -3,9 +3,12 @@
 namespace Mquevedob\Provado;
 
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\ServiceProvider;
 use Mquevedob\Provado\Config\ProvadoConfig;
 use Mquevedob\Provado\Console\DiagnoseCommand;
+use Mquevedob\Provado\Http\HttpClient;
+use Mquevedob\Provado\Http\LaravelHttpClient;
 use Mquevedob\Provado\Incidents\IncidentReportBuilder;
 use Mquevedob\Provado\Patterns\Checkout\CheckoutDegradationPattern;
 use Mquevedob\Provado\Patterns\DiagnosticPatternRegistry;
@@ -58,6 +61,16 @@ class ProvadoServiceProvider extends ServiceProvider
     {
         $this->app->singleton(ProvadoConfig::class, static function (Application $app): ProvadoConfig {
             return ProvadoConfig::fromArray((array) $app['config']->get('provado', []));
+        });
+
+        $this->app->singleton(HttpClient::class, static function (Application $app): HttpClient {
+            $config = $app['config'];
+
+            return new LaravelHttpClient(
+                $app->make(HttpFactory::class),
+                self::positiveFloatOrNull($config->get('provado.http.timeout')),
+                self::positiveFloatOrNull($config->get('provado.http.connect_timeout')),
+            );
         });
 
         $this->app->singleton(SourceAdapterRegistry::class, static function (): SourceAdapterRegistry {
@@ -114,5 +127,20 @@ class ProvadoServiceProvider extends ServiceProvider
                 retryPolicy: $app->make(RetryPolicy::class),
             );
         });
+    }
+
+    /**
+     * Coerce a config value into a positive float of seconds, or null when it
+     * is absent or non-positive (meaning "no client-imposed timeout").
+     */
+    private static function positiveFloatOrNull(mixed $value): ?float
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $seconds = (float) $value;
+
+        return $seconds > 0 ? $seconds : null;
     }
 }

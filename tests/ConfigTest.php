@@ -6,6 +6,7 @@ namespace Mquevedob\Provado\Tests;
 
 use InvalidArgumentException;
 use Mquevedob\Provado\Config\ProvadoConfig;
+use Mquevedob\Provado\Config\SourceConfig;
 use Mquevedob\Provado\Config\SourceCredentials;
 use PHPUnit\Framework\TestCase;
 
@@ -87,6 +88,41 @@ class ConfigTest extends TestCase
                 ],
             ],
         ]);
+    }
+
+    public function test_credentials_presence_helpers(): void
+    {
+        $credentials = new SourceCredentials(['api_key' => 'nr-secret']);
+
+        $this->assertTrue($credentials->has('api_key'));
+        $this->assertFalse($credentials->has('access_token'));
+        $this->assertTrue($credentials->hasAll(['api_key']));
+        $this->assertFalse($credentials->hasAll(['api_key', 'account_id']));
+        $this->assertFalse($credentials->isEmpty());
+
+        $this->assertTrue((new SourceCredentials())->isEmpty());
+        $this->assertFalse((new SourceCredentials())->hasAll(['api_key']));
+    }
+
+    public function test_source_config_reports_configured_credentials(): void
+    {
+        $withCredentials = new SourceConfig(
+            name: 'new_relic',
+            enabled: true,
+            options: [],
+            credentials: new SourceCredentials(['api_key' => 'nr-secret']),
+        );
+
+        $withoutCredentials = new SourceConfig(
+            name: 'new_relic',
+            enabled: true,
+            options: [],
+            credentials: new SourceCredentials(),
+        );
+
+        $this->assertTrue($withCredentials->hasCredentials('api_key'));
+        $this->assertFalse($withCredentials->hasCredentials('api_key', 'extra'));
+        $this->assertFalse($withoutCredentials->hasCredentials('api_key'));
     }
 
     public function test_credentials_are_redacted_in_string_json_and_array_exports(): void

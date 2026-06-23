@@ -15,6 +15,14 @@ final readonly class AdobeCommerceAdapter implements SourceAdapter
 {
     public const SOURCE_NAME = 'adobe_commerce';
 
+    /**
+     * Credentials a credentialed client needs before it can be selected over
+     * the fixture fallback.
+     *
+     * @var list<string>
+     */
+    private const REQUIRED_CREDENTIALS = ['access_token'];
+
     private const DEFAULT_FIXTURES = [
         'checkout_failure_rate',
         'order_sync_backlog',
@@ -25,6 +33,7 @@ final readonly class AdobeCommerceAdapter implements SourceAdapter
     public function __construct(
         private ?AdobeCommerceFixtureClient $fixtureClient = null,
         private ?AdobeCommercePayloadMapper $payloadMapper = null,
+        private ?AdobeCommerceClient $client = null,
     ) {
     }
 
@@ -39,6 +48,15 @@ final readonly class AdobeCommerceAdapter implements SourceAdapter
     }
 
     public function fetch(SourceConfig $config, TimeWindow $window): SourceFetchResult
+    {
+        if ($this->client !== null && $config->hasCredentials(...self::REQUIRED_CREDENTIALS)) {
+            return $this->client->fetch($config, $window);
+        }
+
+        return $this->fetchFromFixtures($config, $window);
+    }
+
+    private function fetchFromFixtures(SourceConfig $config, TimeWindow $window): SourceFetchResult
     {
         $signals = [];
         $errors = [];

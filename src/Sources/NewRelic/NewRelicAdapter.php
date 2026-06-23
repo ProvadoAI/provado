@@ -15,6 +15,14 @@ final readonly class NewRelicAdapter implements SourceAdapter
 {
     public const SOURCE_NAME = 'new_relic';
 
+    /**
+     * Credentials a credentialed client needs before it can be selected over
+     * the fixture fallback.
+     *
+     * @var list<string>
+     */
+    private const REQUIRED_CREDENTIALS = ['api_key'];
+
     private const DEFAULT_FIXTURES = [
         'latency_spike',
         'error_rate_spike',
@@ -24,6 +32,7 @@ final readonly class NewRelicAdapter implements SourceAdapter
     public function __construct(
         private ?NewRelicFixtureClient $fixtureClient = null,
         private ?NewRelicPayloadMapper $payloadMapper = null,
+        private ?NewRelicClient $client = null,
     ) {
     }
 
@@ -38,6 +47,15 @@ final readonly class NewRelicAdapter implements SourceAdapter
     }
 
     public function fetch(SourceConfig $config, TimeWindow $window): SourceFetchResult
+    {
+        if ($this->client !== null && $config->hasCredentials(...self::REQUIRED_CREDENTIALS)) {
+            return $this->client->fetch($config, $window);
+        }
+
+        return $this->fetchFromFixtures($config, $window);
+    }
+
+    private function fetchFromFixtures(SourceConfig $config, TimeWindow $window): SourceFetchResult
     {
         $signals = [];
         $errors = [];

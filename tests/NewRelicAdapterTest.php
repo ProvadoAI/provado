@@ -8,8 +8,15 @@ use DateTimeImmutable;
 use Mquevedob\Provado\Config\SourceConfig;
 use Mquevedob\Provado\Config\SourceCredentials;
 use Mquevedob\Provado\Core\EntityReference;
+use Mquevedob\Provado\Core\RawPayloadReference;
+use Mquevedob\Provado\Core\Signal;
+use Mquevedob\Provado\Core\SignalId;
+use Mquevedob\Provado\Core\SignalSeverity;
+use Mquevedob\Provado\Core\SignalSource;
+use Mquevedob\Provado\Core\SignalType;
 use Mquevedob\Provado\Core\TimeWindow;
 use Mquevedob\Provado\Sources\NewRelic\NewRelicAdapter;
+use Mquevedob\Provado\Sources\NewRelic\NewRelicClient;
 use Mquevedob\Provado\Sources\SourceAdapter;
 use Mquevedob\Provado\Sources\SourceFetchResult;
 use PHPUnit\Framework\TestCase;
@@ -117,6 +124,38 @@ class NewRelicAdapterTest extends TestCase
         $this->assertSame('invalid_payload', $result->errors()[0]->context['fixture']);
     }
 
+    public function test_credentialed_client_is_used_when_credentials_are_present(): void
+    {
+        $client = new StubNewRelicClient(SourceFetchResult::fromSignals([$this->liveSignal()]));
+        $adapter = new NewRelicAdapter(client: $client);
+
+        $result = $adapter->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertSame(1, $client->calls);
+        $this->assertCount(1, $result->signals());
+        $this->assertSame('new_relic:live', $result->signals()[0]->id->value);
+    }
+
+    public function test_falls_back_to_fixtures_when_credentials_are_absent(): void
+    {
+        $client = new StubNewRelicClient(SourceFetchResult::fromSignals([$this->liveSignal()]));
+        $adapter = new NewRelicAdapter(client: $client);
+
+        $result = $adapter->fetch($this->sourceConfig('new_relic'), $this->timeWindow());
+
+        $this->assertSame(0, $client->calls);
+        $this->assertCount(3, $result->signals());
+    }
+
+    public function test_uses_fixtures_when_no_credentialed_client_is_injected(): void
+    {
+        $adapter = new NewRelicAdapter();
+
+        $result = $adapter->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertCount(3, $result->signals());
+    }
+
     /**
      * @param array<string, mixed> $options
      */
@@ -130,11 +169,51 @@ class NewRelicAdapterTest extends TestCase
         );
     }
 
+    private function credentialedConfig(): SourceConfig
+    {
+        return new SourceConfig(
+            name: 'new_relic',
+            enabled: true,
+            options: ['account_id' => '123456'],
+            credentials: new SourceCredentials(['api_key' => 'nr-secret']),
+        );
+    }
+
+    private function liveSignal(): Signal
+    {
+        return new Signal(
+            id: new SignalId('new_relic:live'),
+            source: new SignalSource('new_relic'),
+            type: new SignalType('latency_spike'),
+            timestamp: new DateTimeImmutable('2026-06-08T12:10:00+00:00'),
+            severity: SignalSeverity::warning(),
+            entityReferences: [new EntityReference('service', 'checkout-api')],
+            attributes: ['duration_ms' => 1000],
+            rawPayloadReference: new RawPayloadReference('live'),
+        );
+    }
+
     private function timeWindow(): TimeWindow
     {
         return new TimeWindow(
             start: new DateTimeImmutable('2026-06-08T12:00:00+00:00'),
             end: new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
         );
+    }
+}
+
+final class StubNewRelicClient implements NewRelicClient
+{
+    public int $calls = 0;
+
+    public function __construct(private readonly SourceFetchResult $result)
+    {
+    }
+
+    public function fetch(SourceConfig $config, TimeWindow $window): SourceFetchResult
+    {
+        $this->calls++;
+
+        return $this->result;
     }
 }

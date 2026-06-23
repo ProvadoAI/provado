@@ -55,6 +55,28 @@ final readonly class SourceCredentials implements JsonSerializable
         return array_key_exists($name, $this->values);
     }
 
+    /**
+     * Whether every named credential is present, letting an adapter decide
+     * whether it has enough to select a credentialed client.
+     *
+     * @param list<string> $names
+     */
+    public function hasAll(array $names): bool
+    {
+        foreach ($names as $name) {
+            if (! $this->has($name)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function isEmpty(): bool
+    {
+        return $this->values === [];
+    }
+
     public function get(string $name): ?string
     {
         return $this->values[$name] ?? null;

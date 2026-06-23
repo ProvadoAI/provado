@@ -59,6 +59,16 @@ final readonly class SourceConfig implements JsonSerializable
     }
 
     /**
+     * Whether every named credential is configured for this source. Adapters
+     * use this to decide between a credentialed client and the fixture
+     * fallback without inspecting the credential values themselves.
+     */
+    public function hasCredentials(string ...$names): bool
+    {
+        return $this->credentials->hasAll($names);
+    }
+
+    /**
      * @return array{name: string, enabled: bool, options: array<string, mixed>, credentials: array<string, string>}
      */
     public function toArray(): array

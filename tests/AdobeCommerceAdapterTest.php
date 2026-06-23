@@ -8,8 +8,15 @@ use DateTimeImmutable;
 use Mquevedob\Provado\Config\SourceConfig;
 use Mquevedob\Provado\Config\SourceCredentials;
 use Mquevedob\Provado\Core\EntityReference;
+use Mquevedob\Provado\Core\RawPayloadReference;
+use Mquevedob\Provado\Core\Signal;
+use Mquevedob\Provado\Core\SignalId;
+use Mquevedob\Provado\Core\SignalSeverity;
+use Mquevedob\Provado\Core\SignalSource;
+use Mquevedob\Provado\Core\SignalType;
 use Mquevedob\Provado\Core\TimeWindow;
 use Mquevedob\Provado\Sources\AdobeCommerce\AdobeCommerceAdapter;
+use Mquevedob\Provado\Sources\AdobeCommerce\AdobeCommerceClient;
 use Mquevedob\Provado\Sources\SourceAdapter;
 use Mquevedob\Provado\Sources\SourceFetchResult;
 use PHPUnit\Framework\TestCase;
@@ -146,6 +153,38 @@ class AdobeCommerceAdapterTest extends TestCase
         $this->assertSame([], $result->errors());
     }
 
+    public function test_credentialed_client_is_used_when_credentials_are_present(): void
+    {
+        $client = new StubAdobeCommerceClient(SourceFetchResult::fromSignals([$this->liveSignal()]));
+        $adapter = new AdobeCommerceAdapter(client: $client);
+
+        $result = $adapter->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertSame(1, $client->calls);
+        $this->assertCount(1, $result->signals());
+        $this->assertSame('adobe_commerce:live', $result->signals()[0]->id->value);
+    }
+
+    public function test_falls_back_to_fixtures_when_credentials_are_absent(): void
+    {
+        $client = new StubAdobeCommerceClient(SourceFetchResult::fromSignals([$this->liveSignal()]));
+        $adapter = new AdobeCommerceAdapter(client: $client);
+
+        $result = $adapter->fetch($this->sourceConfig('adobe_commerce'), $this->timeWindow());
+
+        $this->assertSame(0, $client->calls);
+        $this->assertCount(4, $result->signals());
+    }
+
+    public function test_uses_fixtures_when_no_credentialed_client_is_injected(): void
+    {
+        $adapter = new AdobeCommerceAdapter();
+
+        $result = $adapter->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertCount(4, $result->signals());
+    }
+
     /**
      * @param array<string, mixed> $options
      */
@@ -159,11 +198,51 @@ class AdobeCommerceAdapterTest extends TestCase
         );
     }
 
+    private function credentialedConfig(): SourceConfig
+    {
+        return new SourceConfig(
+            name: 'adobe_commerce',
+            enabled: true,
+            options: ['base_url' => 'https://commerce.example.test'],
+            credentials: new SourceCredentials(['access_token' => 'commerce-secret']),
+        );
+    }
+
+    private function liveSignal(): Signal
+    {
+        return new Signal(
+            id: new SignalId('adobe_commerce:live'),
+            source: new SignalSource('adobe_commerce'),
+            type: new SignalType('checkout_failure_rate'),
+            timestamp: new DateTimeImmutable('2026-06-08T12:10:00+00:00'),
+            severity: SignalSeverity::error(),
+            entityReferences: [new EntityReference('store', 'default')],
+            attributes: ['failure_rate' => 0.05],
+            rawPayloadReference: new RawPayloadReference('live'),
+        );
+    }
+
     private function timeWindow(): TimeWindow
     {
         return new TimeWindow(
             start: new DateTimeImmutable('2026-06-08T12:00:00+00:00'),
             end: new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
         );
+    }
+}
+
+final class StubAdobeCommerceClient implements AdobeCommerceClient
+{
+    public int $calls = 0;
+
+    public function __construct(private readonly SourceFetchResult $result)
+    {
+    }
+
+    public function fetch(SourceConfig $config, TimeWindow $window): SourceFetchResult
+    {
+        $this->calls++;
+
+        return $this->result;
     }
 }

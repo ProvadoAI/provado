@@ -2,12 +2,16 @@
 
 ## Roadmap execution
 
-- The work list is `docs/ROADMAP.md`. It is organized into numbered phases. Items are
-  numbered **per phase** — each phase restarts at item 1. So an item is only unambiguous
-  when paired with its phase.
+- `docs/ROADMAP.md` is an **index**, not the work list itself. It points to per-version
+  roadmap files under `docs/roadmaps/` (e.g. `docs/roadmaps/v0.3.0.md`). The active work
+  list is the roadmap file marked **In progress** in that index; resolve it there before
+  starting.
+- Each versioned roadmap is organized into numbered phases (numbering restarts at Phase 1
+  per version). Within a phase, the deliverables are the items, numbered **per phase** —
+  each phase restarts at item 1. So an item is only unambiguous when paired with its phase.
 - **Every roadmap run has an explicit scope. Do not assume the whole roadmap.**
   Accepted ways I'll give scope:
-  - "do the whole roadmap" — all phases, in order.
+  - "do the whole roadmap" — all phases of the active version, in order.
   - "do phase 1" / "do phases 1 and 2" — one or more whole phases, in order.
   - "do phase 2 items 1–3" — a contiguous item range within one phase.
   - "do phase 2 item 2" — a single item within one phase.
@@ -33,12 +37,12 @@
      only. Do NOT run the test suite or install anything (see Local environment).
      "Check it" here means static review, not test execution.
   5. **Hand off** — `git add`, commit (with the `/code-review` summary in the body for
-     source changes), and push to `main`. Include this item's `docs/ROADMAP.md` status
-     flip to "done" in the same commit.
+     source changes), and push to `main`. Include this item's status flip in the active
+     roadmap file under `docs/roadmaps/` in the same commit.
   6. Move to the next item in scope.
-- An item is done once its change is committed and pushed. Set its `docs/ROADMAP.md`
-  status to "done" in the same commit as the change — don't leave a separate trailing
-  commit just for the checkbox.
+- An item is done once its change is committed and pushed. Flip its status in the active
+  roadmap file under `docs/roadmaps/` (e.g. `[ ]` → `[x]`) in the same commit as the change
+  — don't leave a separate trailing commit just for the checkbox.
 
 ## Parallelism
 

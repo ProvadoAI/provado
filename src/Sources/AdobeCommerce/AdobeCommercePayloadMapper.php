@@ -41,6 +41,81 @@ final readonly class AdobeCommercePayloadMapper
     }
 
     /**
+     * Map a live REST `/V1/orders` response into canonical signals.
+     *
+     * This is the real-response path, kept separate from the fixture-shaped
+     * {@see self::map()}. Phase 3 emits one aggregate `order_activity` signal per
+     * store (order count + gross total in the window) — a deliberately minimal
+     * first cut. Phase 4 adds per-status backlog signals and richer mapping.
+     * No REST response shape reaches downstream code — only canonical signals do.
+     *
+     * @param list<mixed> $orders the `items` array of an orders response
+     * @return list<Signal>
+     */
+    public function mapOrders(array $orders, DateTimeImmutable $timestamp): array
+    {
+        $byStore = [];
+
+        foreach ($orders as $order) {
+            if (! is_array($order)) {
+                continue;
+            }
+
+            $storeId = $this->orderStoreId($order);
+            $byStore[$storeId] ??= ['count' => 0, 'gross' => 0.0];
+            $byStore[$storeId]['count']++;
+
+            // Magento may serialize monetary values as numbers or numeric strings.
+            $grandTotal = $order['grand_total'] ?? null;
+
+            if (is_numeric($grandTotal)) {
+                $byStore[$storeId]['gross'] += (float) $grandTotal;
+            }
+        }
+
+        $signals = [];
+
+        foreach ($byStore as $storeId => $aggregate) {
+            // PHP casts numeric-string array keys to int, so coerce back to string.
+            $storeId = (string) $storeId;
+
+            $signals[] = new Signal(
+                id: new SignalId('adobe_commerce:order_activity:'.$storeId),
+                source: new SignalSource('adobe_commerce'),
+                type: new SignalType('order_activity'),
+                timestamp: $timestamp,
+                severity: SignalSeverity::info(),
+                entityReferences: [new EntityReference('store', $storeId)],
+                attributes: [
+                    'order_count' => $aggregate['count'],
+                    'gross_total' => round($aggregate['gross'], 2),
+                ],
+                rawPayloadReference: new RawPayloadReference('order_activity:'.$storeId),
+            );
+        }
+
+        return $signals;
+    }
+
+    /**
+     * @param array<string, mixed> $order
+     */
+    private function orderStoreId(array $order): string
+    {
+        $storeId = $order['store_id'] ?? null;
+
+        if (is_int($storeId)) {
+            return (string) $storeId;
+        }
+
+        if (is_string($storeId) && trim($storeId) !== '') {
+            return trim($storeId);
+        }
+
+        return 'default';
+    }
+
+    /**
      * @param array<string, mixed> $entities
      * @return list<EntityReference>
      */

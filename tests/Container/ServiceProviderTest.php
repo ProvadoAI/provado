@@ -96,13 +96,22 @@ class ServiceProviderTest extends TestCase
 
     public function test_resolved_pipeline_runs_end_to_end_without_live_calls(): void
     {
-        // With an api_key present, New Relic now resolves to the live NerdGraph
-        // client; bind a fake transport so the container-resolved pipeline makes
-        // no real outbound call. (The fixture-data → critical-report scenario is
-        // covered by PipelineTest, which builds adapters without a live client.)
-        $fakeHttp = (new FakeHttpClient())->respondWith(new HttpResponse(200, (string) json_encode([
-            'data' => ['actor' => ['account' => ['nrql' => ['results' => []]]]],
-        ])));
+        // With credentials present, both sources now resolve to their live clients
+        // (NerdGraph + Adobe Commerce REST); bind a fake transport so the
+        // container-resolved pipeline makes no real outbound call. (The
+        // fixture-data → critical-report scenario is covered by PipelineTest, which
+        // builds adapters without a live client.) Responses are consumed in fetch
+        // order: New Relic first, then Adobe Commerce.
+        $fakeHttp = (new FakeHttpClient())
+            ->respondWith(new HttpResponse(200, (string) json_encode([
+                'data' => ['actor' => ['account' => ['nrql' => ['results' => []]]]],
+            ])))
+            ->respondWith(new HttpResponse(200, (string) json_encode([
+                'items' => [
+                    ['entity_id' => 1, 'store_id' => 1, 'grand_total' => 99.5, 'status' => 'complete'],
+                ],
+                'total_count' => 1,
+            ])));
         $this->app->instance(HttpClient::class, $fakeHttp);
 
         $this->enableSources();
@@ -112,11 +121,11 @@ class ServiceProviderTest extends TestCase
 
         $result = $pipeline->run($config, $this->fixtureWindow());
 
-        // New Relic took the live path (one faked, empty NerdGraph result → 0
-        // signals); Adobe Commerce still falls back to its 4 fixture signals.
+        // New Relic: empty NerdGraph result → 0 signals. Adobe Commerce: one order
+        // → one aggregate order_activity signal. Two outbound calls, both faked.
         $this->assertFalse($result->hasErrors());
-        $this->assertCount(1, $fakeHttp->sentRequests());
-        $this->assertSame(4, $result->diagnostics->signalCount);
+        $this->assertCount(2, $fakeHttp->sentRequests());
+        $this->assertSame(1, $result->diagnostics->signalCount);
 
         $signalsBySource = [];
         foreach ($result->diagnostics->sources as $summary) {
@@ -125,7 +134,7 @@ class ServiceProviderTest extends TestCase
         }
 
         $this->assertSame(0, $signalsBySource['new_relic']);
-        $this->assertSame(4, $signalsBySource['adobe_commerce']);
+        $this->assertSame(1, $signalsBySource['adobe_commerce']);
     }
 
     private function enableSources(): void

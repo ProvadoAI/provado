@@ -52,13 +52,29 @@ class NerdGraphClientTest extends TestCase
         $signal = $result->signals()[0];
         $this->assertSame('new_relic', $signal->source->value);
         $this->assertSame('transaction_health', $signal->type->value);
-        $this->assertTrue($signal->hasEntity(new EntityReference('service', 'checkout-api')));
-        $this->assertTrue($signal->hasEntity(new EntityReference('transaction', 'WebTransaction/Checkout/SubmitOrder')));
-        $this->assertSame(128, $signal->attributes['throughput']);
-        $this->assertSame(0.65, $signal->attributes['duration_ms']);
-        $this->assertSame(1.2, $signal->attributes['error_rate']);
-        $this->assertArrayNotHasKey('appName', $signal->attributes);
+        // Entities come from the positional `facet` member, not named columns.
+        $this->assertTrue($signal->hasEntity(new EntityReference('service', 'Magento Lab - Provado')));
+        $this->assertTrue($signal->hasEntity(new EntityReference('transaction', 'OtherTransaction/Custom/CLI cron:run')));
+        $this->assertSame(289, $signal->attributes['throughput']);
+        $this->assertSame(6.85, $signal->attributes['duration_ms']);
+        $this->assertSame(0, $signal->attributes['error_rate']);
         $this->assertArrayNotHasKey('facet', $signal->attributes);
+    }
+
+    public function test_row_without_facet_is_reported_as_invalid_row(): void
+    {
+        $body = json_encode([
+            'data' => ['actor' => ['account' => ['nrql' => ['results' => [
+                ['throughput' => 10, 'duration_ms' => 1.5],
+            ]]]]],
+        ]);
+        $http = (new FakeHttpClient())->respondWith(new HttpResponse(200, (string) $body));
+
+        $result = (new NerdGraphClient($http))->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertSame([], $result->signals());
+        $this->assertSame('invalid_nrql_row', $result->errors()[0]->code);
+        $this->assertSame(0, $result->errors()[0]->context['row']);
     }
 
     public function test_graphql_errors_produce_source_fetch_error(): void
@@ -151,12 +167,12 @@ class NerdGraphClientTest extends TestCase
                         'nrql' => [
                             'results' => [
                                 [
-                                    'appName' => 'checkout-api',
-                                    'name' => 'WebTransaction/Checkout/SubmitOrder',
-                                    'throughput' => 128,
-                                    'duration_ms' => 0.65,
-                                    'error_rate' => 1.2,
-                                    'facet' => ['checkout-api', 'WebTransaction/Checkout/SubmitOrder'],
+                                    // Real NerdGraph multi-facet shape: facet values
+                                    // live in the positional `facet` member.
+                                    'facet' => ['Magento Lab - Provado', 'OtherTransaction/Custom/CLI cron:run'],
+                                    'throughput' => 289,
+                                    'duration_ms' => 6.85,
+                                    'error_rate' => 0,
                                 ],
                             ],
                         ],

@@ -49,15 +49,14 @@ final readonly class NerdGraphClient implements NewRelicClient
     private const DEFAULT_SIGNAL_TYPE = 'transaction_health';
 
     /**
-     * NRQL result field → canonical entity type. A row needs at least one of
-     * these present to become a signal.
+     * Canonical entity type per facet position, matching the default query's
+     * `FACET appName, name`: facet[0] → service, facet[1] → transaction. A row
+     * needs at least one resolvable facet entity to become a signal. Override via
+     * the `facet_entities` option to match a customized FACET clause.
      *
-     * @var array<string, string>
+     * @var list<string>
      */
-    private const DEFAULT_ENTITY_FIELDS = [
-        'appName' => 'service',
-        'name' => 'transaction',
-    ];
+    private const DEFAULT_FACET_ENTITIES = ['service', 'transaction'];
 
     private const GRAPHQL_QUERY = 'query ProvadoNrql($accountId: Int!, $nrql: Nrql!) '
         .'{ actor { account(id: $accountId) { nrql(query: $nrql) { results } } } }';
@@ -161,7 +160,7 @@ final readonly class NerdGraphClient implements NewRelicClient
         }
 
         $type = new SignalType($this->signalType($config));
-        $entityFields = $this->entityFields($config);
+        $facetEntities = $this->facetEntities($config);
 
         $signals = [];
         $errors = [];
@@ -174,7 +173,7 @@ final readonly class NerdGraphClient implements NewRelicClient
             }
 
             try {
-                $signals[] = $this->mapper->mapNrqlRow($row, $type, $window->end, $entityFields, 'nrql:'.$index);
+                $signals[] = $this->mapper->mapNrqlRow($row, $type, $window->end, $facetEntities, 'nrql:'.$index);
             } catch (Throwable $exception) {
                 $errors[] = $this->rowError($index, $exception->getMessage());
             }
@@ -233,25 +232,29 @@ final readonly class NerdGraphClient implements NewRelicClient
     }
 
     /**
-     * @return array<string, string>
+     * Ordered canonical entity types, one per facet position. Override via the
+     * `facet_entities` option (a list of non-empty strings) to match a customized
+     * FACET clause; malformed config falls back to the default.
+     *
+     * @return list<string>
      */
-    private function entityFields(SourceConfig $config): array
+    private function facetEntities(SourceConfig $config): array
     {
-        $fields = $config->option('entity_fields', self::DEFAULT_ENTITY_FIELDS);
+        $configured = $config->option('facet_entities', self::DEFAULT_FACET_ENTITIES);
 
-        if (! is_array($fields)) {
-            return self::DEFAULT_ENTITY_FIELDS;
+        if (! is_array($configured)) {
+            return self::DEFAULT_FACET_ENTITIES;
         }
 
-        $entityFields = [];
+        $facetEntities = [];
 
-        foreach ($fields as $field => $entityType) {
-            if (is_string($field) && trim($field) !== '' && is_string($entityType) && trim($entityType) !== '') {
-                $entityFields[$field] = $entityType;
+        foreach ($configured as $entityType) {
+            if (is_string($entityType) && trim($entityType) !== '') {
+                $facetEntities[] = trim($entityType);
             }
         }
 
-        return $entityFields === [] ? self::DEFAULT_ENTITY_FIELDS : $entityFields;
+        return $facetEntities === [] ? self::DEFAULT_FACET_ENTITIES : $facetEntities;
     }
 
     /**

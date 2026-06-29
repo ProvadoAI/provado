@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Mquevedob\Provado\Tests;
 
+use DateTimeImmutable;
+use InvalidArgumentException;
 use Mquevedob\Provado\Core\EntityReference;
+use Mquevedob\Provado\Core\SignalType;
 use Mquevedob\Provado\Sources\NewRelic\NewRelicPayloadMapper;
 use PHPUnit\Framework\TestCase;
 
@@ -52,6 +55,72 @@ class NewRelicPayloadMapperTest extends TestCase
             static fn (EntityReference $reference): bool => $reference->type === 'store',
         );
         $this->assertSame([], $storeReferences);
+    }
+
+    public function test_nrql_row_maps_facets_positionally_and_collects_numeric_attributes(): void
+    {
+        $signal = (new NewRelicPayloadMapper())->mapNrqlRow(
+            [
+                'facet' => ['Magento Lab - Provado', 'OtherTransaction/Custom/CLI cron:run'],
+                'throughput' => 289,
+                'duration_ms' => 6.85,
+                'error_rate' => 0,
+            ],
+            new SignalType('transaction_health'),
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+            ['service', 'transaction'],
+            'nrql:0',
+        );
+
+        $this->assertSame('new_relic:nrql:0', $signal->id->value);
+        $this->assertSame('info', $signal->severity->value);
+        $this->assertTrue($signal->hasEntity(new EntityReference('service', 'Magento Lab - Provado')));
+        $this->assertTrue($signal->hasEntity(new EntityReference('transaction', 'OtherTransaction/Custom/CLI cron:run')));
+        $this->assertSame(['throughput' => 289, 'duration_ms' => 6.85, 'error_rate' => 0], $signal->attributes);
+        $this->assertNull($signal->rawPayloadReference->location);
+    }
+
+    public function test_nrql_row_honors_explicit_severity_column(): void
+    {
+        $signal = (new NewRelicPayloadMapper())->mapNrqlRow(
+            ['facet' => 'checkout-api', 'severity' => 'critical', 'error_rate' => 0.4],
+            new SignalType('transaction_health'),
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+            ['service'],
+            'nrql:0',
+        );
+
+        // A single-facet scalar is normalized to one positional entity, and the
+        // severity column is consumed rather than treated as an attribute.
+        $this->assertSame('critical', $signal->severity->value);
+        $this->assertTrue($signal->hasEntity(new EntityReference('service', 'checkout-api')));
+        $this->assertSame(['error_rate' => 0.4], $signal->attributes);
+    }
+
+    public function test_nrql_row_without_resolvable_facet_throws(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        (new NewRelicPayloadMapper())->mapNrqlRow(
+            ['throughput' => 10],
+            new SignalType('transaction_health'),
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+            ['service'],
+            'nrql:0',
+        );
+    }
+
+    public function test_nrql_row_without_numeric_attributes_throws(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        (new NewRelicPayloadMapper())->mapNrqlRow(
+            ['facet' => ['checkout-api']],
+            new SignalType('transaction_health'),
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+            ['service'],
+            'nrql:0',
+        );
     }
 
     /**

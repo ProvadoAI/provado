@@ -17,9 +17,22 @@ use Mquevedob\Provado\Core\SignalType;
 final readonly class NewRelicPayloadMapper
 {
     /**
+     * NRQL columns that are never signal attributes: `facet` holds entity values,
+     * `severity` is consumed separately.
+     *
+     * @var list<string>
+     */
+    private const NRQL_RESERVED_COLUMNS = ['facet', 'severity'];
+
+    /**
+     * @var list<string>
+     */
+    private const SEVERITY_VALUES = ['info', 'warning', 'error', 'critical'];
+
+    /**
      * @param array<string, mixed> $payload
      */
-    public function map(array $payload): Signal
+    public function map(array $payload, ?string $rawPayloadLocation = null): Signal
     {
         $fixtureId = $this->stringValue($payload, 'id');
         $eventType = $this->stringValue($payload, 'event_type');
@@ -38,7 +51,7 @@ final readonly class NewRelicPayloadMapper
             severity: $severity,
             entityReferences: $this->entityReferences($applicationName, $transactionName, $storeName),
             attributes: $this->attributes($metrics),
-            rawPayloadReference: new RawPayloadReference($fixtureId, 'tests/Fixtures/new_relic/'.$fixtureId.'.json'),
+            rawPayloadReference: new RawPayloadReference($fixtureId, $rawPayloadLocation),
         );
     }
 
@@ -46,26 +59,40 @@ final readonly class NewRelicPayloadMapper
      * Map a single live NRQL result row into a canonical Signal.
      *
      * This is the real-response path, kept separate from the fixture-shaped
-     * {@see self::map()}: NRQL rows carry faceted entity fields plus numeric
-     * aggregates rather than the fixture envelope. Phase 1 keeps this deliberately
-     * minimal (severity defaults to info); Phase 2 hardens severity derivation and
-     * the range of shapes handled. No NerdGraph envelope shape reaches this method
-     * — the client passes a plain result row.
+     * {@see self::map()}. A faceted NRQL row carries its facet values in a
+     * `facet` member (an ordered list for multi-facet queries, or a scalar for a
+     * single facet) plus numeric aggregate columns — not named entity columns.
+     * `$facetEntityTypes` names the canonical entity type for each facet position,
+     * matching the order of the query's FACET clause (e.g. `FACET appName, name`
+     * → `['service', 'transaction']`).
+     *
+     * Severity stays `info` unless the row carries an explicit, valid `severity`
+     * column: per the architecture direction, a raw signal is an observation and
+     * severity *interpretation* belongs to the pattern layer, not the adapter.
+     *
+     * No NerdGraph envelope shape reaches this method — the client passes a plain
+     * result row.
      *
      * @param array<string, mixed> $row
-     * @param array<string, string> $entityFields result field => canonical entity type
+     * @param list<string> $facetEntityTypes canonical entity type per facet position
      */
     public function mapNrqlRow(
         array $row,
         SignalType $type,
         DateTimeImmutable $timestamp,
-        array $entityFields,
+        array $facetEntityTypes,
         string $id,
     ): Signal {
-        $entityReferences = $this->nrqlEntityReferences($row, $entityFields);
+        $entityReferences = $this->nrqlEntityReferences($row, $facetEntityTypes);
 
         if ($entityReferences === []) {
-            throw new InvalidArgumentException('NRQL result row must include at least one known entity field.');
+            throw new InvalidArgumentException('NRQL result row must include at least one facet entity.');
+        }
+
+        $attributes = $this->numericAttributes($row, self::NRQL_RESERVED_COLUMNS);
+
+        if ($attributes === []) {
+            throw new InvalidArgumentException('NRQL result row must include at least one numeric attribute.');
         }
 
         return new Signal(
@@ -73,28 +100,46 @@ final readonly class NewRelicPayloadMapper
             source: new SignalSource('new_relic'),
             type: $type,
             timestamp: $timestamp,
-            severity: SignalSeverity::info(),
+            severity: $this->nrqlSeverity($row),
             entityReferences: $entityReferences,
-            attributes: $this->nrqlAttributes($row, array_keys($entityFields)),
             // Live NRQL signals have no on-disk fixture, so no location is recorded.
             rawPayloadReference: new RawPayloadReference($id),
+            attributes: $attributes,
         );
     }
 
     /**
+     * Map the NRQL `facet` member to entity references by position. The member is
+     * a list for multi-facet queries and a scalar for a single facet; both are
+     * normalized to a positional list here.
+     *
      * @param array<string, mixed> $row
-     * @param array<string, string> $entityFields
+     * @param list<string> $facetEntityTypes
      * @return list<EntityReference>
      */
-    private function nrqlEntityReferences(array $row, array $entityFields): array
+    private function nrqlEntityReferences(array $row, array $facetEntityTypes): array
     {
+        $facets = $row['facet'] ?? null;
+
+        if (is_string($facets) || is_int($facets) || is_float($facets)) {
+            $facets = [$facets];
+        }
+
+        if (! is_array($facets)) {
+            return [];
+        }
+
         $references = [];
 
-        foreach ($entityFields as $field => $entityType) {
-            $value = $row[$field] ?? null;
+        foreach (array_values($facets) as $position => $value) {
+            $entityType = $facetEntityTypes[$position] ?? null;
 
-            if (is_string($value) && trim($value) !== '') {
-                $references[] = new EntityReference($entityType, $value);
+            if (! is_string($entityType) || trim($entityType) === '') {
+                continue;
+            }
+
+            if ((is_string($value) || is_int($value) || is_float($value)) && trim((string) $value) !== '') {
+                $references[] = new EntityReference($entityType, (string) $value);
             }
         }
 
@@ -102,32 +147,19 @@ final readonly class NewRelicPayloadMapper
     }
 
     /**
-     * Numeric aggregates become signal attributes; entity fields and any
-     * non-numeric columns (e.g. the NRQL `facet` array) are skipped.
+     * Honor an explicit, valid `severity` column; otherwise default to info.
      *
      * @param array<string, mixed> $row
-     * @param list<string> $entityFields
-     * @return array<string, int|float>
      */
-    private function nrqlAttributes(array $row, array $entityFields): array
+    private function nrqlSeverity(array $row): SignalSeverity
     {
-        $attributes = [];
+        $severity = $row['severity'] ?? null;
 
-        foreach ($row as $name => $value) {
-            if (! is_string($name) || in_array($name, $entityFields, true)) {
-                continue;
-            }
-
-            if (is_int($value) || is_float($value)) {
-                $attributes[$name] = $value;
-            }
+        if (is_string($severity) && in_array(strtolower(trim($severity)), self::SEVERITY_VALUES, true)) {
+            return new SignalSeverity(strtolower(trim($severity)));
         }
 
-        if ($attributes === []) {
-            throw new InvalidArgumentException('NRQL result row must include at least one numeric attribute.');
-        }
-
-        return $attributes;
+        return SignalSeverity::info();
     }
 
     /**
@@ -177,16 +209,37 @@ final readonly class NewRelicPayloadMapper
      */
     private function attributes(array $metrics): array
     {
-        $attributes = [];
-
-        foreach ($metrics as $name => $value) {
-            if (is_int($value) || is_float($value)) {
-                $attributes[$name] = $value;
-            }
-        }
+        $attributes = $this->numericAttributes($metrics);
 
         if ($attributes === []) {
             throw new InvalidArgumentException('New Relic payload metrics must include at least one numeric value.');
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * Collect the numeric (int|float) members of an array as signal attributes,
+     * skipping any reserved/non-numeric columns. Shared by the fixture metrics
+     * path and the NRQL row path; each caller decides whether an empty result is
+     * an error.
+     *
+     * @param array<string, mixed> $values
+     * @param list<string> $excludeKeys
+     * @return array<string, int|float>
+     */
+    private function numericAttributes(array $values, array $excludeKeys = []): array
+    {
+        $attributes = [];
+
+        foreach ($values as $name => $value) {
+            if (! is_string($name) || in_array($name, $excludeKeys, true)) {
+                continue;
+            }
+
+            if (is_int($value) || is_float($value)) {
+                $attributes[$name] = $value;
+            }
         }
 
         return $attributes;

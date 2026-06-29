@@ -17,7 +17,7 @@ use PHPUnit\Framework\TestCase;
 
 class AdobeCommerceRestClientTest extends TestCase
 {
-    public function test_sends_bearer_get_to_normalized_rest_orders_endpoint(): void
+    public function test_sends_oauth_signed_get_to_normalized_rest_orders_endpoint(): void
     {
         $http = (new FakeHttpClient())->respondWith($this->ordersResponse());
 
@@ -29,7 +29,12 @@ class AdobeCommerceRestClientTest extends TestCase
         $this->assertNotNull($request);
         $this->assertSame('GET', $request->method);
         $this->assertSame('https://shop.test/rest/V1/orders', $request->uri);
-        $this->assertSame('Bearer commerce-secret', $request->headers['Authorization']);
+        // OAuth 1.0a signed Authorization header (not a plain Bearer token).
+        $this->assertStringStartsWith('OAuth ', $request->headers['Authorization']);
+        $this->assertStringContainsString('oauth_consumer_key="ck"', $request->headers['Authorization']);
+        $this->assertStringContainsString('oauth_token="atok"', $request->headers['Authorization']);
+        $this->assertStringContainsString('oauth_signature_method="HMAC-SHA256"', $request->headers['Authorization']);
+        $this->assertStringContainsString('oauth_signature=', $request->headers['Authorization']);
         $this->assertSame('created_at', $request->query['searchCriteria[filterGroups][0][filters][0][field]']);
         $this->assertSame('gteq', $request->query['searchCriteria[filterGroups][0][filters][0][conditionType]']);
         $this->assertSame('2026-06-08 12:00:00', $request->query['searchCriteria[filterGroups][0][filters][0][value]']);
@@ -60,6 +65,33 @@ class AdobeCommerceRestClientTest extends TestCase
         $this->assertTrue($signal->hasEntity(new EntityReference('store', '1')));
         $this->assertSame(2, $signal->attributes['order_count']);
         $this->assertSame(149.75, $signal->attributes['gross_total']);
+    }
+
+    public function test_signed_query_encoding_matches_guzzle_wire_encoding(): void
+    {
+        $http = (new FakeHttpClient())->respondWith($this->ordersResponse());
+
+        (new AdobeCommerceRestClient($http))->fetch($this->credentialedConfig(), $this->timeWindow());
+        $request = $http->lastRequest();
+        $this->assertNotNull($request);
+
+        // Laravel's HTTP client (Guzzle) serializes the query with this exact
+        // call; the OAuth signer signs the same params with per-pair rawurlencode.
+        // This pins that the wire encoding matches the signed base string, so a
+        // divergence (e.g. RFC 1738 encoding a space as "+") is caught here rather
+        // than as a live "signature is invalid".
+        $wire = http_build_query($request->query, '', '&', PHP_QUERY_RFC3986);
+
+        foreach ($request->query as $key => $value) {
+            $this->assertStringContainsString(
+                rawurlencode((string) $key).'='.rawurlencode((string) $value),
+                $wire,
+            );
+        }
+
+        // The created_at filter value contains a space — it must encode as %20.
+        $this->assertStringContainsString('2026-06-08%2012%3A00%3A00', $wire);
+        $this->assertStringNotContainsString('+', $wire);
     }
 
     public function test_base_url_with_uppercase_rest_is_normalized(): void
@@ -126,13 +158,30 @@ class AdobeCommerceRestClientTest extends TestCase
             name: 'adobe_commerce',
             enabled: true,
             options: [],
-            credentials: new SourceCredentials(['access_token' => 'commerce-secret']),
+            credentials: new SourceCredentials($this->oauthCredentials()),
         );
 
         $result = (new AdobeCommerceRestClient($http))->fetch($config, $this->timeWindow());
 
         $this->assertSame([], $http->sentRequests());
         $this->assertSame('missing_base_url', $result->errors()[0]->code);
+    }
+
+    public function test_incomplete_oauth_credentials_error_without_calling_http(): void
+    {
+        $http = new FakeHttpClient();
+        // access_token present but the OAuth secrets are missing.
+        $config = new SourceConfig(
+            name: 'adobe_commerce',
+            enabled: true,
+            options: ['base_url' => 'https://shop.test'],
+            credentials: new SourceCredentials(['access_token' => 'atok']),
+        );
+
+        $result = (new AdobeCommerceRestClient($http))->fetch($config, $this->timeWindow());
+
+        $this->assertSame([], $http->sentRequests());
+        $this->assertSame('missing_credentials', $result->errors()[0]->code);
     }
 
     public function test_response_without_items_is_invalid(): void
@@ -174,8 +223,21 @@ class AdobeCommerceRestClientTest extends TestCase
             name: 'adobe_commerce',
             enabled: true,
             options: ['base_url' => $baseUrl],
-            credentials: new SourceCredentials(['access_token' => 'commerce-secret']),
+            credentials: new SourceCredentials($this->oauthCredentials()),
         );
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function oauthCredentials(): array
+    {
+        return [
+            'consumer_key' => 'ck',
+            'consumer_secret' => 'cs',
+            'access_token' => 'atok',
+            'access_token_secret' => 'ats',
+        ];
     }
 
     private function timeWindow(): TimeWindow

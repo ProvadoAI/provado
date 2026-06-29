@@ -56,16 +56,17 @@ final readonly class AdobeCommerceRestClient implements AdobeCommerceClient
             );
         }
 
-        $accessToken = $config->credentials->get('access_token');
+        $signer = $this->signer($config);
 
-        if ($accessToken === null) {
+        if ($signer === null) {
             return $this->errorResult(
-                'Adobe Commerce access_token credential is required for live REST queries.',
+                'Adobe Commerce OAuth 1.0a credentials (consumer_key, consumer_secret, access_token, '
+                .'access_token_secret) are required for live REST queries.',
                 'missing_credentials',
             );
         }
 
-        $request = $this->buildOrdersRequest($restBase, $accessToken, $window, $config);
+        $request = $this->buildOrdersRequest($restBase, $signer, $window, $config);
 
         try {
             $response = $this->httpClient->send($request);
@@ -86,19 +87,58 @@ final readonly class AdobeCommerceRestClient implements AdobeCommerceClient
 
     private function buildOrdersRequest(
         string $restBase,
-        string $accessToken,
+        OAuth1Signer $signer,
         TimeWindow $window,
         SourceConfig $config,
     ): HttpRequest {
+        $uri = $restBase.'/V1/orders';
+        $query = $this->ordersSearchCriteria($window, $config);
+
+        // The signature must cover the query parameters. Laravel's HTTP client
+        // (Guzzle) serializes the query with http_build_query(PHP_QUERY_RFC3986),
+        // which is the same rawurlencode rule the signer applies to the base
+        // string (space -> %20, brackets -> %5B/%5D), so the wire request matches
+        // what was signed. That contract is pinned by
+        // AdobeCommerceRestClientTest::test_signed_query_encoding_matches_guzzle_wire_encoding.
+        $authorization = $signer->authorizationHeader('GET', $uri, $query, $this->nonce(), $this->timestamp());
+
         return new HttpRequest(
             method: 'GET',
-            uri: $restBase.'/V1/orders',
+            uri: $uri,
             headers: [
-                'Authorization' => 'Bearer '.$accessToken,
+                'Authorization' => $authorization,
                 'Accept' => 'application/json',
             ],
-            query: $this->ordersSearchCriteria($window, $config),
+            query: $query,
         );
+    }
+
+    /**
+     * Build the OAuth 1.0a signer from the four integration credentials, or null
+     * when any is absent.
+     */
+    private function signer(SourceConfig $config): ?OAuth1Signer
+    {
+        $consumerKey = $config->credentials->get('consumer_key');
+        $consumerSecret = $config->credentials->get('consumer_secret');
+        $accessToken = $config->credentials->get('access_token');
+        $accessTokenSecret = $config->credentials->get('access_token_secret');
+
+        if ($consumerKey === null || $consumerSecret === null || $accessToken === null || $accessTokenSecret === null) {
+            return null;
+        }
+
+        return new OAuth1Signer($consumerKey, $consumerSecret, $accessToken, $accessTokenSecret);
+    }
+
+    private function nonce(): string
+    {
+        return bin2hex(random_bytes(16));
+    }
+
+    private function timestamp(): int
+    {
+        return time();
     }
 
     /**

@@ -46,8 +46,14 @@ return [
             'options' => [
                 'base_url' => env('PROVADO_ADOBE_COMMERCE_BASE_URL'),
             ],
+            // Magento integrations authenticate via OAuth 1.0a — all four
+            // credentials are required to sign requests (a plain Bearer token is
+            // not honored for the integration's ACL).
             'credentials' => [
+                'consumer_key' => env('PROVADO_ADOBE_COMMERCE_CONSUMER_KEY'),
+                'consumer_secret' => env('PROVADO_ADOBE_COMMERCE_CONSUMER_SECRET'),
                 'access_token' => env('PROVADO_ADOBE_COMMERCE_ACCESS_TOKEN'),
+                'access_token_secret' => env('PROVADO_ADOBE_COMMERCE_ACCESS_TOKEN_SECRET'),
             ],
         ],
     ],

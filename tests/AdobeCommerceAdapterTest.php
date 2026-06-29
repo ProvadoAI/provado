@@ -204,7 +204,12 @@ class AdobeCommerceAdapterTest extends TestCase
             name: 'adobe_commerce',
             enabled: true,
             options: ['base_url' => 'https://commerce.example.test'],
-            credentials: new SourceCredentials(['access_token' => 'commerce-secret']),
+            credentials: new SourceCredentials([
+                'consumer_key' => 'ck',
+                'consumer_secret' => 'cs',
+                'access_token' => 'commerce-secret',
+                'access_token_secret' => 'ats',
+            ]),
         );
     }
 

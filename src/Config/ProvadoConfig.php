@@ -19,7 +19,7 @@ final readonly class ProvadoConfig implements JsonSerializable
         ],
         'adobe_commerce' => [
             'required_options' => ['base_url'],
-            'required_credentials' => ['access_token'],
+            'required_credentials' => ['consumer_key', 'consumer_secret', 'access_token', 'access_token_secret'],
         ],
     ];
 

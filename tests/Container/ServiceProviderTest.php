@@ -147,7 +147,12 @@ class ServiceProviderTest extends TestCase
         $this->app['config']->set('provado.sources.adobe_commerce', [
             'enabled' => true,
             'options' => ['base_url' => 'https://commerce.example.test'],
-            'credentials' => ['access_token' => 'test-token'],
+            'credentials' => [
+                'consumer_key' => 'ck',
+                'consumer_secret' => 'cs',
+                'access_token' => 'test-token',
+                'access_token_secret' => 'ats',
+            ],
         ]);
     }
 

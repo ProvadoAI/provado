@@ -21,7 +21,7 @@ final readonly class AdobeCommerceAdapter implements SourceAdapter
      *
      * @var list<string>
      */
-    private const REQUIRED_CREDENTIALS = ['access_token'];
+    private const REQUIRED_CREDENTIALS = ['consumer_key', 'consumer_secret', 'access_token', 'access_token_secret'];
 
     private const DEFAULT_FIXTURES = [
         'checkout_failure_rate',

@@ -33,9 +33,17 @@
      and wait for an explicit OK before implementing. For everything else, implement
      directly.
   3. **Implement** — make the change.
-  4. **Check** — run `/code-review` on the diff and read the diff yourself. STATIC check
-     only. Do NOT run the test suite or install anything (see Local environment).
-     "Check it" here means static review, not test execution.
+  4. **Check** — two gates, both required before hand-off, both run automatically every
+     item (I do not wait to be asked):
+     - **Tests:** sync the working tree to the lab server and run the suite there
+       (`php -d newrelic.enabled=0 vendor/bin/phpunit`). For new or changed behavior, add
+       or update tests in the same item. Iterate fix→retest until green. If a test is red,
+       fix the root cause — never weaken, skip, or delete a test to force green; if the
+       test itself is wrong, STOP and flag it before changing it. If stuck (same failure
+       after a couple of genuine attempts) or a failure smells like environment
+       (DB / OpenSearch / network rather than my code), STOP and surface the output instead
+       of hammering. See "Test environment (lab server)".
+     - **Review:** run `/code-review` on the diff and read the diff yourself.
   5. **Hand off** — `git add`, commit (with the `/code-review` summary in the body for
      source changes), and push to `main`. Include this item's status flip in the active
      roadmap file under `docs/roadmaps/` in the same commit.
@@ -56,6 +64,9 @@
   by the orchestrator — never two agents pushing to `main` at once. Fan out the editing, then
   fan in and commit + push each item sequentially. On a non-fast-forward rejection,
   `git pull --rebase` and retry.
+- **Testing is serialized too:** there is one shared lab-server test mirror, so the green-suite
+  gate (loop step 4) runs one item at a time, coordinated by the orchestrator — fan out the
+  editing, then fan in and test + commit + push each item sequentially.
 - Be conservative. Parallel agents multiply token / usage cost. Only fan out when it clearly
   saves wall-clock time, and only within the scope I named. Don't spawn more than 3 subagents
   at once without asking.
@@ -66,18 +77,31 @@
 - One commit per roadmap item. `git add` the changed files, commit, `git push` to `main`.
 - Reference the item in the commit subject (e.g. "phase 2 item 1: fix Z-suffix UTC
   timestamp parsing").
-- **Before committing any source-code change** (`src/**`, `tests/**`), run a `/code-review`
-  pass on the staged diff and put the summary in the commit body — what was fixed vs. left
-  open. Static review only: no install, no test run (see Local environment). This is a
-  default; do it without being asked.
+- **Before committing any source-code change** (`src/**`, `tests/**`), the suite must be
+  green on the lab server (loop step 4) and a `/code-review` pass must have run on the staged
+  diff. Put the `/code-review` summary in the commit body — what was fixed vs. left open —
+  and note the tests are green. This is a default; do it without being asked.
 - Docs-only changes (`docs/**`, markdown) don't need the `/code-review` pass.
 - Push after each item so progress is visible on GitHub. Don't batch the whole scope into
   one push unless I ask.
 - If a push is rejected as non-fast-forward, `git pull --rebase` and retry.
 
-## Local environment
+## Test environment (lab server)
 
-- **Do NOT install dependencies (`composer install`/`require`) or run the test
-  suite in the working environment.** The deliverable is the committed code;
-  the human handles dependency installation and test runs. The `/code-review`
-  pass is still required — it reads the diff statically and needs no install.
+- The local working copy has **no `vendor/`** — composer deps are not installed on the PC,
+  so tests cannot run there. The **lab server is the test source of truth**; GitHub stays the
+  canonical git source of truth, and the PC is just the editing workspace.
+- **Run the suite automatically as part of every source item** (loop step 4) — I do not wait
+  to be asked. Flow: edit locally → sync the working tree to the server → run PHPUnit there →
+  iterate fix→retest until green → then `/code-review`, commit, push from local.
+- SSH host alias `provado`; repo at `/var/www/html/provado`, treated as a **test mirror** —
+  never edited there, safe to `git fetch && git reset --hard origin/main` before/after a run.
+- Sync with tar-over-ssh (no `rsync` on the PC):
+  `tar -czf - src tests config composer.json phpunit.xml | ssh provado 'tar -xzf - -C /var/www/html/provado'`.
+- The test command MUST disable the New Relic ext or PHPUnit OOM-kills on the server:
+  `php -d newrelic.enabled=0 vendor/bin/phpunit`. This affects only the test run — it does
+  not touch Magento's web/APM monitoring (a live Provado data source).
+- If `composer.json` changes (a phase adds a dependency), run `composer install` on the server
+  before testing. Otherwise do not reinstall.
+- Never weaken, skip, or delete a test to force green — fix the cause; if the test is wrong,
+  stop and flag it first.

@@ -1,0 +1,188 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Mquevedob\Provado\Tests;
+
+use DateTimeImmutable;
+use Mquevedob\Provado\Config\SourceConfig;
+use Mquevedob\Provado\Config\SourceCredentials;
+use Mquevedob\Provado\Core\EntityReference;
+use Mquevedob\Provado\Core\TimeWindow;
+use Mquevedob\Provado\Http\FakeHttpClient;
+use Mquevedob\Provado\Http\HttpResponse;
+use Mquevedob\Provado\Http\HttpTransportException;
+use Mquevedob\Provado\Sources\NewRelic\NerdGraphClient;
+use PHPUnit\Framework\TestCase;
+
+class NerdGraphClientTest extends TestCase
+{
+    public function test_sends_graphql_post_with_api_key_and_windowed_nrql(): void
+    {
+        $http = (new FakeHttpClient())->respondWith($this->successResponse());
+        $window = $this->timeWindow();
+
+        (new NerdGraphClient($http))->fetch($this->credentialedConfig(), $window);
+
+        $request = $http->lastRequest();
+
+        $this->assertNotNull($request);
+        $this->assertSame('POST', $request->method);
+        $this->assertSame('https://api.newrelic.com/graphql', $request->uri);
+        $this->assertSame('nr-secret', $request->headers['API-Key']);
+        $this->assertIsArray($request->jsonBody);
+        $this->assertStringContainsString('nrql(query: $nrql)', $request->jsonBody['query']);
+        $this->assertSame(123456, $request->jsonBody['variables']['accountId']);
+        $this->assertStringContainsString('FROM Transaction', $request->jsonBody['variables']['nrql']);
+        $this->assertStringContainsString(
+            sprintf('SINCE %d UNTIL %d', $window->start->getTimestamp() * 1000, $window->end->getTimestamp() * 1000),
+            $request->jsonBody['variables']['nrql'],
+        );
+    }
+
+    public function test_successful_response_maps_results_to_signals(): void
+    {
+        $http = (new FakeHttpClient())->respondWith($this->successResponse());
+
+        $result = (new NerdGraphClient($http))->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertSame([], $result->errors());
+        $this->assertCount(1, $result->signals());
+
+        $signal = $result->signals()[0];
+        $this->assertSame('new_relic', $signal->source->value);
+        $this->assertSame('transaction_health', $signal->type->value);
+        $this->assertTrue($signal->hasEntity(new EntityReference('service', 'checkout-api')));
+        $this->assertTrue($signal->hasEntity(new EntityReference('transaction', 'WebTransaction/Checkout/SubmitOrder')));
+        $this->assertSame(128, $signal->attributes['throughput']);
+        $this->assertSame(0.65, $signal->attributes['duration_ms']);
+        $this->assertSame(1.2, $signal->attributes['error_rate']);
+        $this->assertArrayNotHasKey('appName', $signal->attributes);
+        $this->assertArrayNotHasKey('facet', $signal->attributes);
+    }
+
+    public function test_graphql_errors_produce_source_fetch_error(): void
+    {
+        $body = json_encode(['errors' => [['message' => 'NRQL syntax error']]]);
+        $http = (new FakeHttpClient())->respondWith(new HttpResponse(200, (string) $body));
+
+        $result = (new NerdGraphClient($http))->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertSame([], $result->signals());
+        $this->assertTrue($result->hasErrors());
+        $this->assertSame('graphql_error', $result->errors()[0]->code);
+        $this->assertFalse($result->errors()[0]->retryable);
+    }
+
+    public function test_auth_failure_is_not_retryable(): void
+    {
+        $http = (new FakeHttpClient())->respondWith(new HttpResponse(401, '{}'));
+
+        $result = (new NerdGraphClient($http))->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertSame('auth_error', $result->errors()[0]->code);
+        $this->assertFalse($result->errors()[0]->retryable);
+    }
+
+    public function test_server_error_is_retryable(): void
+    {
+        $http = (new FakeHttpClient())->respondWith(new HttpResponse(500, ''));
+
+        $result = (new NerdGraphClient($http))->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertSame('server_error', $result->errors()[0]->code);
+        $this->assertTrue($result->errors()[0]->retryable);
+    }
+
+    public function test_rate_limited_is_retryable(): void
+    {
+        $http = (new FakeHttpClient())->respondWith(new HttpResponse(429, '', ['Retry-After' => '30']));
+
+        $result = (new NerdGraphClient($http))->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertSame('rate_limited', $result->errors()[0]->code);
+        $this->assertTrue($result->errors()[0]->retryable);
+        $this->assertSame(30, $result->errors()[0]->context['retry_after']);
+    }
+
+    public function test_transport_failure_is_retryable(): void
+    {
+        $http = (new FakeHttpClient())->failWith(new HttpTransportException('connection reset', retryable: true));
+
+        $result = (new NerdGraphClient($http))->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertSame('transport_error', $result->errors()[0]->code);
+        $this->assertTrue($result->errors()[0]->retryable);
+    }
+
+    public function test_missing_account_id_errors_without_calling_http(): void
+    {
+        $http = new FakeHttpClient();
+        $config = new SourceConfig(
+            name: 'new_relic',
+            enabled: true,
+            options: [],
+            credentials: new SourceCredentials(['api_key' => 'nr-secret']),
+        );
+
+        $result = (new NerdGraphClient($http))->fetch($config, $this->timeWindow());
+
+        $this->assertSame([], $http->sentRequests());
+        $this->assertSame('missing_account_id', $result->errors()[0]->code);
+        $this->assertFalse($result->errors()[0]->retryable);
+    }
+
+    public function test_invalid_json_body_is_reported_as_invalid_response(): void
+    {
+        $http = (new FakeHttpClient())->respondWith(new HttpResponse(200, 'not json'));
+
+        $result = (new NerdGraphClient($http))->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $this->assertSame([], $result->signals());
+        $this->assertSame('invalid_response', $result->errors()[0]->code);
+    }
+
+    private function successResponse(): HttpResponse
+    {
+        $body = json_encode([
+            'data' => [
+                'actor' => [
+                    'account' => [
+                        'nrql' => [
+                            'results' => [
+                                [
+                                    'appName' => 'checkout-api',
+                                    'name' => 'WebTransaction/Checkout/SubmitOrder',
+                                    'throughput' => 128,
+                                    'duration_ms' => 0.65,
+                                    'error_rate' => 1.2,
+                                    'facet' => ['checkout-api', 'WebTransaction/Checkout/SubmitOrder'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        return new HttpResponse(200, (string) $body);
+    }
+
+    private function credentialedConfig(): SourceConfig
+    {
+        return new SourceConfig(
+            name: 'new_relic',
+            enabled: true,
+            options: ['account_id' => '123456'],
+            credentials: new SourceCredentials(['api_key' => 'nr-secret']),
+        );
+    }
+
+    private function timeWindow(): TimeWindow
+    {
+        return new TimeWindow(
+            start: new DateTimeImmutable('2026-06-08T12:00:00+00:00'),
+            end: new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+        );
+    }
+}

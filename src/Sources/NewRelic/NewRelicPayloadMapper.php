@@ -43,6 +43,94 @@ final readonly class NewRelicPayloadMapper
     }
 
     /**
+     * Map a single live NRQL result row into a canonical Signal.
+     *
+     * This is the real-response path, kept separate from the fixture-shaped
+     * {@see self::map()}: NRQL rows carry faceted entity fields plus numeric
+     * aggregates rather than the fixture envelope. Phase 1 keeps this deliberately
+     * minimal (severity defaults to info); Phase 2 hardens severity derivation and
+     * the range of shapes handled. No NerdGraph envelope shape reaches this method
+     * — the client passes a plain result row.
+     *
+     * @param array<string, mixed> $row
+     * @param array<string, string> $entityFields result field => canonical entity type
+     */
+    public function mapNrqlRow(
+        array $row,
+        SignalType $type,
+        DateTimeImmutable $timestamp,
+        array $entityFields,
+        string $id,
+    ): Signal {
+        $entityReferences = $this->nrqlEntityReferences($row, $entityFields);
+
+        if ($entityReferences === []) {
+            throw new InvalidArgumentException('NRQL result row must include at least one known entity field.');
+        }
+
+        return new Signal(
+            id: new SignalId('new_relic:'.$id),
+            source: new SignalSource('new_relic'),
+            type: $type,
+            timestamp: $timestamp,
+            severity: SignalSeverity::info(),
+            entityReferences: $entityReferences,
+            attributes: $this->nrqlAttributes($row, array_keys($entityFields)),
+            // Live NRQL signals have no on-disk fixture, so no location is recorded.
+            rawPayloadReference: new RawPayloadReference($id),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @param array<string, string> $entityFields
+     * @return list<EntityReference>
+     */
+    private function nrqlEntityReferences(array $row, array $entityFields): array
+    {
+        $references = [];
+
+        foreach ($entityFields as $field => $entityType) {
+            $value = $row[$field] ?? null;
+
+            if (is_string($value) && trim($value) !== '') {
+                $references[] = new EntityReference($entityType, $value);
+            }
+        }
+
+        return $references;
+    }
+
+    /**
+     * Numeric aggregates become signal attributes; entity fields and any
+     * non-numeric columns (e.g. the NRQL `facet` array) are skipped.
+     *
+     * @param array<string, mixed> $row
+     * @param list<string> $entityFields
+     * @return array<string, int|float>
+     */
+    private function nrqlAttributes(array $row, array $entityFields): array
+    {
+        $attributes = [];
+
+        foreach ($row as $name => $value) {
+            if (! is_string($name) || in_array($name, $entityFields, true)) {
+                continue;
+            }
+
+            if (is_int($value) || is_float($value)) {
+                $attributes[$name] = $value;
+            }
+        }
+
+        if ($attributes === []) {
+            throw new InvalidArgumentException('NRQL result row must include at least one numeric attribute.');
+        }
+
+        return $attributes;
+    }
+
+    /**
      * @return list<EntityReference>
      */
     private function entityReferences(string $applicationName, ?string $transactionName, ?string $storeName): array

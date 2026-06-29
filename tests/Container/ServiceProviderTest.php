@@ -8,7 +8,9 @@ use DateTimeImmutable;
 use Illuminate\Contracts\Foundation\Application;
 use Mquevedob\Provado\Config\ProvadoConfig;
 use Mquevedob\Provado\Core\TimeWindow;
+use Mquevedob\Provado\Http\FakeHttpClient;
 use Mquevedob\Provado\Http\HttpClient;
+use Mquevedob\Provado\Http\HttpResponse;
 use Mquevedob\Provado\Http\LaravelHttpClient;
 use Mquevedob\Provado\Incidents\IncidentReportBuilder;
 use Mquevedob\Provado\Patterns\DiagnosticPatternRegistry;
@@ -92,28 +94,42 @@ class ServiceProviderTest extends TestCase
         $this->assertFalse($config->source('adobe_commerce')->enabled);
     }
 
-    public function test_resolved_pipeline_runs_over_fixtures_and_builds_a_report(): void
+    public function test_resolved_pipeline_runs_end_to_end_without_live_calls(): void
     {
-        $this->enableFixtureSources();
+        // With an api_key present, New Relic now resolves to the live NerdGraph
+        // client; bind a fake transport so the container-resolved pipeline makes
+        // no real outbound call. (The fixture-data → critical-report scenario is
+        // covered by PipelineTest, which builds adapters without a live client.)
+        $fakeHttp = (new FakeHttpClient())->respondWith(new HttpResponse(200, (string) json_encode([
+            'data' => ['actor' => ['account' => ['nrql' => ['results' => []]]]],
+        ])));
+        $this->app->instance(HttpClient::class, $fakeHttp);
+
+        $this->enableSources();
 
         $pipeline = $this->app->make(DiagnosticPipeline::class);
         $config = $this->app->make(ProvadoConfig::class);
 
         $result = $pipeline->run($config, $this->fixtureWindow());
 
-        // 3 New Relic + 4 Adobe Commerce fixtures correlate into one group the
-        // checkout-degradation pattern matches, producing a single report.
-        $this->assertSame(7, $result->diagnostics->signalCount);
-        $this->assertSame(1, $result->diagnostics->correlationGroupCount);
-        $this->assertTrue($result->hasReport());
+        // New Relic took the live path (one faked, empty NerdGraph result → 0
+        // signals); Adobe Commerce still falls back to its 4 fixture signals.
         $this->assertFalse($result->hasErrors());
-        $this->assertSame('critical', $result->report?->severity->value);
+        $this->assertCount(1, $fakeHttp->sentRequests());
+        $this->assertSame(4, $result->diagnostics->signalCount);
+
+        $signalsBySource = [];
+        foreach ($result->diagnostics->sources as $summary) {
+            $signalsBySource[$summary->sourceName] = $summary->signalCount;
+            $this->assertSame(0, $summary->errorCount);
+        }
+
+        $this->assertSame(0, $signalsBySource['new_relic']);
+        $this->assertSame(4, $signalsBySource['adobe_commerce']);
     }
 
-    private function enableFixtureSources(): void
+    private function enableSources(): void
     {
-        // Fixture adapters ignore credentials, but ProvadoConfig requires them
-        // when an enabled source is validated, so supply placeholders.
         $this->app['config']->set('provado.sources.new_relic', [
             'enabled' => true,
             'options' => ['account_id' => '000000'],

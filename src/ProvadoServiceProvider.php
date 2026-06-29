@@ -22,6 +22,7 @@ use Mquevedob\Provado\Pipeline\PipelineObserver;
 use Mquevedob\Provado\Pipeline\PsrLoggerObserver;
 use Mquevedob\Provado\Pipeline\RetryPolicy;
 use Mquevedob\Provado\Sources\AdobeCommerce\AdobeCommerceAdapter;
+use Mquevedob\Provado\Sources\NewRelic\NerdGraphClient;
 use Mquevedob\Provado\Sources\NewRelic\NewRelicAdapter;
 use Mquevedob\Provado\Sources\SourceAdapterRegistry;
 use Mquevedob\Provado\Storage\DatabaseSignalStoreFactory;
@@ -75,9 +76,9 @@ class ProvadoServiceProvider extends ServiceProvider
             );
         });
 
-        $this->app->singleton(SourceAdapterRegistry::class, static function (): SourceAdapterRegistry {
+        $this->app->singleton(SourceAdapterRegistry::class, static function (Application $app): SourceAdapterRegistry {
             return new SourceAdapterRegistry([
-                new NewRelicAdapter(),
+                new NewRelicAdapter(client: new NerdGraphClient($app->make(HttpClient::class))),
                 new AdobeCommerceAdapter(),
             ]);
         });

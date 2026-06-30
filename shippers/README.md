@@ -2,7 +2,8 @@
 
 Merchant-side collectors that push Magento operational signals into New Relic as
 `ProvadoSignal` custom events, which Provado then reads remotely via NerdGraph. See
-`docs/signal-shipping.md` for the contract. **Pick one** — they are interchangeable
+`docs/signal-shipping.md` for the contract and `docs/shipping-methods.md` for a deeper
+explanation of the three methods and how to choose. **Pick one** — they are interchangeable
 and emit the same event shape; Provado's reader does not care which produced it.
 
 | Shipper | Path | When to use |

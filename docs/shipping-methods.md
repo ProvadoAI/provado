@@ -132,5 +132,14 @@ state**, never verdicts.
 ## Lab note
 
 On the Provado lab the **PHP-agent** method is used (the NR PHP extension is present, no Insert key
-needed). It has been run on demand during development; making it continuous is a one-line OS-cron
-entry as above.
+needed). It is scheduled in root's OS-cron, firing every 5 minutes:
+
+```cron
+*/5 * * * * MAGENTO_ROOT=/var/www/html/magento /usr/bin/php /var/www/html/provado/shippers/php-agent/provado-ship.php >> /var/log/provado-ship.log 2>&1
+```
+
+so `ProvadoSignal` events arrive continuously and Provado's read window holds a real time series —
+the precondition for dwell (v0.6.0). The shipper runs with the NR PHP extension **enabled** (that
+is the shipping path); only the PHPUnit test run disables it (`-d newrelic.enabled=0`). The cron
+points at the mirror checkout (`/var/www/html/provado`), whose shipper file is tracked and so
+survives the `git reset --hard` the test mirror gets.

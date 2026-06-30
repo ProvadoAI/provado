@@ -43,4 +43,5 @@ you use. Ordered by leverage:
 ## Scheduling
 
 Run every 1–5 minutes (cron / agent interval). Provado reads the latest state over a
-window and computes dwell from the series.
+window and computes dwell from the series. On the Provado lab this shipper is scheduled in
+root's crontab every 5 minutes — see `docs/shipping-methods.md` → "Lab note" for the exact entry.

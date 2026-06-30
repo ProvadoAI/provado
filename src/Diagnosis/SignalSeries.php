@@ -70,15 +70,7 @@ final readonly class SignalSeries
      */
     public function dwellSeconds(Signal $reference, callable $isBad): int
     {
-        $key = $this->key($reference);
-
-        $matching = [];
-
-        foreach ($this->signals as $signal) {
-            if ($this->key($signal) === $key) {
-                $matching[] = $signal;
-            }
-        }
+        $matching = $this->matchingSeries($reference);
 
         if ($matching === []) {
             return 0;
@@ -105,6 +97,47 @@ final readonly class SignalSeries
         }
 
         return $latest->timestamp->getTimestamp() - $onset->timestamp->getTimestamp();
+    }
+
+    /**
+     * The learned-normal baseline for `$metric` across the series matching
+     * `$reference`'s `(type, entity)`. Non-numeric or absent readings are skipped;
+     * an empty/short series yields a baseline the caller can detect via
+     * sampleCount() and fall back from (cold start).
+     */
+    public function baselineFor(Signal $reference, string $metric): MetricBaseline
+    {
+        $samples = [];
+
+        foreach ($this->matchingSeries($reference) as $signal) {
+            $value = $signal->attributes[$metric] ?? null;
+
+            if (is_int($value) || is_float($value)) {
+                $samples[] = $value;
+            }
+        }
+
+        return new MetricBaseline($samples);
+    }
+
+    /**
+     * The signals whose `(type, entity-set)` matches `$reference` — i.e. the series
+     * of one logical entity across polls.
+     *
+     * @return list<Signal>
+     */
+    private function matchingSeries(Signal $reference): array
+    {
+        $key = $this->key($reference);
+        $matching = [];
+
+        foreach ($this->signals as $signal) {
+            if ($this->key($signal) === $key) {
+                $matching[] = $signal;
+            }
+        }
+
+        return $matching;
     }
 
     /**

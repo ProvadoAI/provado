@@ -115,6 +115,29 @@ class SignalSeriesTest extends TestCase
         $this->assertSame(0, $series->dwellSeconds($this->indexer('catalogsearch_fulltext', 9, '11:00'), $this->backlogged()));
     }
 
+    public function test_baseline_for_collects_the_metric_across_the_matching_series(): void
+    {
+        $series = new SignalSeries([
+            $this->cronAt(300, '11:00'),
+            $this->cronAt(500, '11:05'),
+            $this->cronAt(400, '11:10'),
+        ]);
+
+        $baseline = $series->baselineFor($this->cronAt(0, '11:15'), 'pending');
+
+        $this->assertSame(3, $baseline->sampleCount());
+        $this->assertSame(400.0, $baseline->median());
+    }
+
+    public function test_baseline_for_is_empty_when_no_snapshot_matches_the_reference(): void
+    {
+        $series = new SignalSeries([$this->cronAt(300, '11:00')]);
+
+        $baseline = $series->baselineFor($this->indexer('catalogsearch_fulltext', 1, '11:00'), 'pending');
+
+        $this->assertSame(0, $baseline->sampleCount());
+    }
+
     /**
      * Predicate: a cron snapshot is "bad" when its pending backlog exceeds 100.
      *

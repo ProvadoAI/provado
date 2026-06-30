@@ -155,6 +155,53 @@ class CronHealthPatternTest extends TestCase
         $this->assertSame('error', $result->findings()[0]->severity->value);
     }
 
+    public function test_a_worker_stuck_running_past_its_runtime_fires(): void
+    {
+        // running stays at 1 across the whole window (>=15 min) while backlog and
+        // errors are normal — a worker stuck mid-job, not a busy one.
+        $group = new CorrelationGroup([
+            $this->cronAt(['pending' => 5, 'running' => 1, 'missed' => 0, 'error' => 10], '14:40'),
+            $this->cronAt(['pending' => 5, 'running' => 1, 'missed' => 0, 'error' => 10], '14:45'),
+            $this->cronAt(['pending' => 5, 'running' => 1, 'missed' => 0, 'error' => 10], '14:50'),
+            $this->cronAt(['pending' => 5, 'running' => 1, 'missed' => 0, 'error' => 10], '14:55'),
+            $this->cronAt(['pending' => 5, 'running' => 1, 'missed' => 0, 'error' => 10], '15:00'),
+        ]);
+
+        $finding = (new CronHealthPattern())->evaluate($group)->findings()[0];
+
+        $this->assertSame('error', $finding->severity->value);
+        $this->assertTrue($finding->evidence['running_stuck']);
+        $this->assertSame(1200, $finding->evidence['running_dwell_seconds']);
+        $this->assertStringContainsString('possible stuck worker', $finding->summary);
+    }
+
+    public function test_a_briefly_running_worker_does_not_fire(): void
+    {
+        // running is non-zero only in the latest snapshot — a job that is busy now,
+        // not stuck. Dwell is 0, below the stuck threshold.
+        $group = new CorrelationGroup([
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 10], '14:45'),
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 10], '14:50'),
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 10], '14:55'),
+            $this->cronAt(['pending' => 5, 'running' => 1, 'missed' => 0, 'error' => 10], '15:00'),
+        ]);
+
+        $this->assertFalse((new CronHealthPattern())->evaluate($group)->hasFindings());
+    }
+
+    public function test_running_below_the_stuck_threshold_does_not_fire(): void
+    {
+        // running for two polls (~300s) is under the 900s stuck threshold.
+        $group = new CorrelationGroup([
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 10], '14:45'),
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 10], '14:50'),
+            $this->cronAt(['pending' => 5, 'running' => 1, 'missed' => 0, 'error' => 10], '14:55'),
+            $this->cronAt(['pending' => 5, 'running' => 1, 'missed' => 0, 'error' => 10], '15:00'),
+        ]);
+
+        $this->assertFalse((new CronHealthPattern())->evaluate($group)->hasFindings());
+    }
+
     public function test_a_short_series_falls_back_to_the_static_cold_start_floor(): void
     {
         // Two snapshots is below MIN_BASELINE_SAMPLES, so the static floor applies:

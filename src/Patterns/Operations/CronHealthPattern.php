@@ -54,6 +54,20 @@ final readonly class CronHealthPattern implements DiagnosticPattern
      */
     private const MIN_BASELINE_SAMPLES = 4;
 
+    /**
+     * A normal cron job finishes within a poll or two; `running > 0` persisting
+     * past this flags a *possible* stuck worker (a scheduled task reporting
+     * "running" while processing nothing — the ACSD-51431 shape), distinct from
+     * `missed` (scheduler not firing) and `pending` (backlog).
+     *
+     * Caveat — `running` is a count, not a per-job identity: a continuously-busy
+     * instance with a steady stream of short jobs can also keep the count non-zero
+     * across the window. So this is a candidate to inspect, not a certainty; the
+     * verdict and summary hedge accordingly. A per-job running-age signal (shipper
+     * change) would make it definitive — deferred.
+     */
+    private const STUCK_RUNNING_SECONDS = 900;
+
     /** A config change within this many seconds of the cron signal is "recent". */
     private const RECENT_CONFIG_CHANGE_SECONDS = 3600;
 
@@ -99,10 +113,12 @@ final readonly class CronHealthPattern implements DiagnosticPattern
 
         $pendingElevated = $this->isMetricElevated($series, $cron, 'pending', self::PENDING_BACKLOG);
         $errorElevated = $this->isMetricElevated($series, $cron, 'error', self::ERROR_ELEVATED);
+        $runningDwell = $this->runningDwellSeconds($series, $cron);
+        $runningStuck = $runningDwell >= self::STUCK_RUNNING_SECONDS;
 
-        // Healthy cron: nothing missed, and neither backlog nor errors are high
-        // relative to this instance's learned-normal (or the cold-start floor).
-        if ($missed === 0 && ! $pendingElevated && ! $errorElevated) {
+        // Healthy cron: nothing missed, backlog/errors within learned-normal (or the
+        // cold-start floor), and no worker stuck running past its expected runtime.
+        if ($missed === 0 && ! $pendingElevated && ! $errorElevated && ! $runningStuck) {
             return PatternEvaluationResult::none();
         }
 
@@ -113,21 +129,39 @@ final readonly class CronHealthPattern implements DiagnosticPattern
                 id: DiagnosticFindingId::fromPatternAndCorrelation($this->id(), $group->id),
                 patternId: $this->id(),
                 title: 'Cron health degraded',
-                summary: $this->summary($missed, $pending, $error, $downstream),
-                severity: $this->severity($missed, $pendingElevated, $errorElevated),
+                summary: $this->summary($missed, $pending, $error, $running, $runningStuck, $runningDwell, $downstream),
+                severity: $this->severity($missed, $pendingElevated, $errorElevated, $runningStuck),
                 correlationId: $group->id,
-                evidence: $this->evidence($group, $series, $cron, $missed, $pending, $error, $running, $downstream),
+                evidence: $this->evidence($group, $series, $cron, $missed, $pending, $error, $running, $runningDwell, $runningStuck, $downstream),
                 recommendedNextChecks: self::RECOMMENDED_NEXT_CHECKS,
             ),
         ]);
     }
 
     /**
+     * How long `running` has been continuously above zero, ending at the latest
+     * snapshot — the dwell that distinguishes a worker stuck mid-job from a job
+     * that is merely busy right now. 0 when nothing is running.
+     */
+    private function runningDwellSeconds(SignalSeries $series, Signal $cron): int
+    {
+        if ($this->metric($cron, 'running') <= 0) {
+            return 0;
+        }
+
+        return $series->dwellSeconds($cron, fn (Signal $s): bool => $this->metric($s, 'running') > 0);
+    }
+
+    /**
      * @param list<string> $downstream
      */
-    private function summary(int $missed, int $pending, int $error, array $downstream): string
+    private function summary(int $missed, int $pending, int $error, int $running, bool $runningStuck, int $runningDwell, array $downstream): string
     {
         $state = sprintf('%d pending, %d missed, %d errored cron rows', $pending, $missed, $error);
+
+        if ($runningStuck) {
+            $state .= sprintf(', running held at %d for %ds (possible stuck worker)', $running, $runningDwell);
+        }
 
         if ($downstream === []) {
             return sprintf('Cron is degraded (%s) with no downstream symptoms observed yet.', $state);
@@ -171,14 +205,14 @@ final readonly class CronHealthPattern implements DiagnosticPattern
         return $value > $floor;
     }
 
-    private function severity(int $missed, bool $pendingElevated, bool $errorElevated): DiagnosticFindingSeverity
+    private function severity(int $missed, bool $pendingElevated, bool $errorElevated, bool $runningStuck): DiagnosticFindingSeverity
     {
         if ($missed > 0) {
             // The scheduler is not firing — the worst cron failure.
             return DiagnosticFindingSeverity::critical();
         }
 
-        if ($pendingElevated || $errorElevated) {
+        if ($pendingElevated || $errorElevated || $runningStuck) {
             return DiagnosticFindingSeverity::error();
         }
 
@@ -245,6 +279,8 @@ final readonly class CronHealthPattern implements DiagnosticPattern
         int $pending,
         int $error,
         int $running,
+        int $runningDwell,
+        bool $runningStuck,
         array $downstream,
     ): array {
         $evidence = $this->baseEvidence($group);
@@ -258,6 +294,8 @@ final readonly class CronHealthPattern implements DiagnosticPattern
             $cron,
             fn (Signal $s): bool => $this->isCronUnhealthy($s, $series),
         );
+        $evidence['running_dwell_seconds'] = $runningDwell;
+        $evidence['running_stuck'] = $runningStuck;
         $evidence['cron_baseline'] = $this->baselineEvidence($series, $cron);
         $evidence['downstream_symptoms'] = $downstream;
 

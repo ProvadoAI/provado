@@ -30,8 +30,11 @@ you use. Ordered by leverage:
 | `signal` | Source query (Magento) | Metrics |
 |---|---|---|
 | `cron_health` | `cron_schedule` status counts | pending, running, success, missed, error |
-| `indexer_status` *(planned)* | `mview_state` vs `MAX(*_cl.version_id)`, `indexer_state` | backlog, stuck |
+| `indexer_status` | per view: `MAX(<view>_cl.version_id)` − `mview_state.version_id`, `indexer_state` | one event per `indexer`: backlog, working, invalid |
 | `queue_backlog` *(planned)* | `queue_message_status` (+ RabbitMQ `/api/queues`) | ready, unacked, consumers |
+
+> `indexer_status` emits one `ProvadoSignal` per scheduled view (entity `indexer`), so it uses
+> the php-agent or Event API path — the per-view changelog backlog isn't a single Flex query.
 
 ## Scheduling
 

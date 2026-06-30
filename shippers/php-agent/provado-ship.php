@@ -61,3 +61,27 @@ ship('cron_health', $source, [
     'missed'  => (int) ($counts['missed'] ?? 0),
     'error'   => (int) ($counts['error'] ?? 0),
 ]);
+
+// --- signal: indexer_status ------------------------------------------------
+// Per scheduled view: changelog backlog (MAX(<view>_cl.version_id) −
+// mview_state.version_id) plus working/invalid flags. A view stuck "working"
+// with zero backlog is the valid-while-failed case (ACSD-51431); status alone
+// is unreliable, so always pair it with backlog.
+$views = $pdo->query("SELECT view_id, version_id, status FROM {$prefix}mview_state")->fetchAll(PDO::FETCH_ASSOC);
+$indexerState = $pdo->query("SELECT indexer_id, status FROM {$prefix}indexer_state")->fetchAll(PDO::FETCH_KEY_PAIR);
+
+foreach ($views as $view) {
+    $clMax = 0;
+    try {
+        $clMax = (int) $pdo->query('SELECT MAX(version_id) FROM `'.$prefix.$view['view_id'].'_cl`')->fetchColumn();
+    } catch (\Throwable $e) {
+        // No changelog table for this view; treat backlog as 0.
+    }
+
+    ship('indexer_status', $source, [
+        'indexer' => $view['view_id'],
+        'backlog' => max(0, $clMax - (int) $view['version_id']),
+        'working' => $view['status'] === 'working' ? 1 : 0,
+        'invalid' => ($indexerState[$view['view_id']] ?? '') === 'invalid' ? 1 : 0,
+    ]);
+}

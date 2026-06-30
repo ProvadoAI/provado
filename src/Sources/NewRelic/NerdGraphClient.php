@@ -78,7 +78,7 @@ final readonly class NerdGraphClient implements NewRelicClient
      *
      * @var list<string>
      */
-    private const DEFAULT_SIGNAL_ENTITY_FIELDS = ['store', 'indexer', 'queue', 'cache', 'cron_job', 'host', 'service', 'transaction'];
+    private const DEFAULT_SIGNAL_ENTITY_FIELDS = ['store', 'indexer', 'queue', 'cache', 'consumer', 'cron_job', 'host', 'service', 'transaction'];
 
     private const GRAPHQL_QUERY = 'query ProvadoNrql($accountId: Int!, $nrql: Nrql!) '
         .'{ actor { account(id: $accountId) { nrql(query: $nrql) { results } } } }';

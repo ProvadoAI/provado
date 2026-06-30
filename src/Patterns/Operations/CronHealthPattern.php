@@ -40,6 +40,8 @@ final readonly class CronHealthPattern implements DiagnosticPattern
 
     private const CACHE_VALIDITY = 'cache_validity';
 
+    private const CONSUMER_LIVENESS = 'consumer_liveness';
+
     private const CONFIG_CHANGE = 'config_change';
 
     /**
@@ -267,26 +269,72 @@ final readonly class CronHealthPattern implements DiagnosticPattern
                 continue;
             }
 
-            $label = $edge->entityType.' '.$this->entityId($signal, $edge->entityType);
+            $id = $this->entityId($signal, $edge->entityType);
 
-            $symptoms[$label] = [
-                'label' => $label,
+            $symptoms[$edge->entityType.' '.$id] = [
+                'label' => $edge->entityType.' '.$id,
                 'dwell_seconds' => $series->dwellSeconds(
                     $signal,
                     fn (Signal $s): bool => $this->isSymptomatic($edge, $s),
                 ),
+                'node' => $edge->node,
+                'id' => $id,
+                // For the email edge, the queue this consumer drains (shipped on the
+                // consumer_liveness event) — so a same-incident queue symptom dedupes
+                // by the real consumer→queue link, since a consumer's name and its
+                // queue name frequently differ.
+                'queue' => $edge->node === 'email' ? $this->entityId($signal, 'queue') : null,
             ];
         }
 
-        return array_values($symptoms);
+        return $this->dedupeConsumerAgainstQueue($symptoms);
+    }
+
+    /**
+     * The `queue` edge (RabbitMQ's broker view: work ready, no subscriber) and the
+     * `email` edge (Magento's view: the consumer has work but holds no run-lock)
+     * observe the same dead consumer from two layers. When the email/consumer symptom
+     * is for a consumer whose queue is itself a flagged queue symptom, keep the queue
+     * symptom and drop the duplicate consumer one, so the incident is attributed once
+     * rather than twice. Matching is by the consumer→queue link, not by name (the two
+     * names often differ). Returns the public label/dwell shape, stripping the
+     * internal bookkeeping.
+     *
+     * @param array<string, array{label: string, dwell_seconds: int, node: string, id: string, queue: ?string}> $symptoms
+     * @return list<array{label: string, dwell_seconds: int}>
+     */
+    private function dedupeConsumerAgainstQueue(array $symptoms): array
+    {
+        $flaggedQueues = [];
+
+        foreach ($symptoms as $symptom) {
+            if ($symptom['node'] === 'queue') {
+                $flaggedQueues[$symptom['id']] = true;
+            }
+        }
+
+        $deduped = [];
+
+        foreach ($symptoms as $symptom) {
+            if ($symptom['node'] === 'email'
+                && $symptom['queue'] !== null
+                && isset($flaggedQueues[$symptom['queue']])) {
+                continue;
+            }
+
+            $deduped[] = ['label' => $symptom['label'], 'dwell_seconds' => $symptom['dwell_seconds']];
+        }
+
+        return $deduped;
     }
 
     /**
      * The Magento dependency graph rooted at cron: cron is upstream of cache,
-     * index, email and queue (the architecture doc's lead pattern). Index, queue and
-     * cache are lit — their `ProvadoSignal`s ship today (cache via the "Instrument"
-     * shipper's `cache_validity`, v0.7.0). Email is declared but dark: it awaits the
-     * consumer-liveness signal and lights up by supplying it, with no graph redesign.
+     * index, email and queue (the architecture doc's lead pattern). All four edges
+     * are now lit — their `ProvadoSignal`s ship today (cache and email via the
+     * "Instrument" shipper's `cache_validity` / `consumer_liveness`, v0.7.0). This
+     * completes the v1 lead pattern: a degraded cron collapses cache, index, email
+     * and queue staleness into one root cause.
      */
     private function cronDependencyGraph(): DependencyGraph
     {
@@ -294,7 +342,7 @@ final readonly class CronHealthPattern implements DiagnosticPattern
             DependencyEdge::lit('index', 'indexer', self::INDEXER_STATUS),
             DependencyEdge::lit('queue', 'queue', self::QUEUE_BACKLOG),
             DependencyEdge::lit('cache', 'cache', self::CACHE_VALIDITY),
-            DependencyEdge::dark('email', 'consumer'),
+            DependencyEdge::lit('email', 'consumer', self::CONSUMER_LIVENESS),
         ]);
     }
 
@@ -302,8 +350,10 @@ final readonly class CronHealthPattern implements DiagnosticPattern
      * Whether a downstream signal is currently symptomatic for its edge. Edge
      * semantics: an indexer in backlog or invalid; a queue with work ready but no
      * consumer draining it (disconnected); a cache type left invalidated (cron is the
-     * worker that cleans it, so an invalidated cache under a degraded cron is the
-     * cron→cache symptom). A newly-lit edge adds its arm here.
+     * worker that cleans it); an email/queue consumer with work waiting but no running
+     * process (cron is the runner that starts it, so work waiting with nothing running
+     * under a degraded cron is the cron→email symptom). A newly-lit edge adds its arm
+     * here.
      */
     private function isSymptomatic(DependencyEdge $edge, Signal $signal): bool
     {
@@ -311,6 +361,7 @@ final readonly class CronHealthPattern implements DiagnosticPattern
             'index' => $this->metric($signal, 'backlog') > 0 || $this->metric($signal, 'invalid') > 0,
             'queue' => $this->metric($signal, 'ready') > 0 && $this->metric($signal, 'consumers') === 0,
             'cache' => $this->metric($signal, 'invalidated') > 0,
+            'email' => $this->metric($signal, 'has_messages') > 0 && $this->metric($signal, 'running') === 0,
             default => false,
         };
     }
@@ -349,8 +400,8 @@ final readonly class CronHealthPattern implements DiagnosticPattern
         $evidence['cron_baseline'] = $this->baselineEvidence($series, $cron);
         $evidence['downstream_symptoms'] = array_column($downstream, 'label');
         $evidence['downstream_dwell_seconds'] = array_column($downstream, 'dwell_seconds', 'label');
-        // Surface the whole graph, including edges declared but not yet fed by a
-        // signal (cache/email), so the collapse's coverage is explicit.
+        // Surface the whole graph — lit edges (all four as of v0.7.0) and any still
+        // declared-but-dark — so the collapse's coverage is explicit.
         $evidence['dependency_graph'] = [
             'upstream' => $graph->upstream,
             'lit' => $graph->litEdges(),

@@ -73,10 +73,10 @@ class CronHealthPatternTest extends TestCase
         $this->assertStringContainsString('attributed to it', $finding->summary);
     }
 
-    public function test_downstream_collapse_is_dwell_qualified_and_declares_dark_edges(): void
+    public function test_downstream_collapse_is_dwell_qualified_and_lights_all_edges(): void
     {
         // The same indexer is in backlog across two polls → dwell 300s. After v0.7.0
-        // lit the cache edge, index/queue/cache are lit and only email stays dark.
+        // lit the cache and email edges, all four cron edges are lit and none remain dark.
         $group = new CorrelationGroup([
             $this->cron(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855]),
             $this->indexerAt('catalogsearch_fulltext', 120, '14:55'),
@@ -87,8 +87,76 @@ class CronHealthPatternTest extends TestCase
 
         $this->assertContains('indexer catalogsearch_fulltext', $finding->evidence['downstream_symptoms']);
         $this->assertSame(300, $finding->evidence['downstream_dwell_seconds']['indexer catalogsearch_fulltext']);
-        $this->assertSame(['index', 'queue', 'cache'], $finding->evidence['dependency_graph']['lit']);
-        $this->assertSame(['email'], $finding->evidence['dependency_graph']['dark']);
+        $this->assertSame(['index', 'queue', 'cache', 'email'], $finding->evidence['dependency_graph']['lit']);
+        $this->assertSame([], $finding->evidence['dependency_graph']['dark']);
+    }
+
+    public function test_a_dead_email_consumer_collapses_under_the_cron_verdict(): void
+    {
+        // consumer_liveness ships has_messages + running per consumer. Work waiting
+        // with no running process is a dead consumer (the cron→email symptom); a
+        // running consumer or an idle one (no work) is not.
+        $group = new CorrelationGroup([
+            $this->cron(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855]),
+            $this->consumer('async.operations.all', 'async.operations.all', hasMessages: 1, running: 0), // dead: work, not running
+            $this->consumer('product_action_attribute.update', 'product_action_attribute.update', hasMessages: 1, running: 1), // alive
+            $this->consumer('media.storage.catalog.image.resize', 'media.storage.catalog.image.resize', hasMessages: 0, running: 0), // idle, no work
+        ]);
+
+        $symptoms = (new CronHealthPattern())->evaluate($group)->findings()[0]->evidence['downstream_symptoms'];
+
+        $this->assertContains('consumer async.operations.all', $symptoms);
+        $this->assertNotContains('consumer product_action_attribute.update', $symptoms);
+        $this->assertNotContains('consumer media.storage.catalog.image.resize', $symptoms);
+    }
+
+    public function test_a_dead_consumer_is_attributed_once_when_its_queue_also_flags(): void
+    {
+        // The RabbitMQ queue view (ready>0, consumers=0) and the Magento consumer view
+        // (has_messages, not running) are the same incident. Dedup must link by the
+        // consumer's actual queue, NOT its name: exportProcessor drains queue "export",
+        // and the two must still collapse to the single queue symptom, not two.
+        $group = new CorrelationGroup([
+            $this->cron(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855]),
+            $this->queue('export', 50, 0),
+            $this->consumer('exportProcessor', 'export', hasMessages: 1, running: 0),
+        ]);
+
+        $symptoms = (new CronHealthPattern())->evaluate($group)->findings()[0]->evidence['downstream_symptoms'];
+
+        $this->assertContains('queue export', $symptoms);
+        $this->assertNotContains('consumer exportProcessor', $symptoms);
+    }
+
+    public function test_a_dead_consumer_still_flags_when_its_queue_is_not_separately_reported(): void
+    {
+        // No queue_backlog symptom for this consumer's queue (e.g. queue_backlog not
+        // shipped, or RabbitMQ showed a subscriber) → the consumer symptom is NOT
+        // deduped away; it stands on its own.
+        $group = new CorrelationGroup([
+            $this->cron(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855]),
+            $this->queue('some.other.queue', 50, 0),
+            $this->consumer('exportProcessor', 'export', hasMessages: 1, running: 0),
+        ]);
+
+        $symptoms = (new CronHealthPattern())->evaluate($group)->findings()[0]->evidence['downstream_symptoms'];
+
+        $this->assertContains('consumer exportProcessor', $symptoms);
+        $this->assertContains('queue some.other.queue', $symptoms);
+    }
+
+    public function test_email_consumer_symptom_is_dwell_qualified(): void
+    {
+        // A consumer with work and not running across two polls → dwell 300s.
+        $group = new CorrelationGroup([
+            $this->cron(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855]),
+            $this->consumerAt('async.operations.all', 'async.operations.all', 1, 0, '14:55'),
+            $this->consumerAt('async.operations.all', 'async.operations.all', 1, 0, '15:00'),
+        ]);
+
+        $finding = (new CronHealthPattern())->evaluate($group)->findings()[0];
+
+        $this->assertSame(300, $finding->evidence['downstream_dwell_seconds']['consumer async.operations.all']);
     }
 
     public function test_an_invalidated_cache_collapses_under_the_cron_verdict(): void
@@ -360,6 +428,33 @@ class CronHealthPatternTest extends TestCase
             ],
             attributes: ['invalidated' => $invalidated],
             rawPayloadReference: new RawPayloadReference('cache_validity:'.$type.':'.$hhmm),
+        );
+    }
+
+    private function consumer(string $name, string $queue, int $hasMessages, int $running): Signal
+    {
+        return $this->signal('consumer_liveness', [
+            new EntityReference('consumer', $name),
+            new EntityReference('queue', $queue),
+            new EntityReference('host', 'provado'),
+        ], ['has_messages' => $hasMessages, 'running' => $running]);
+    }
+
+    private function consumerAt(string $name, string $queue, int $hasMessages, int $running, string $hhmm): Signal
+    {
+        return new Signal(
+            id: new SignalId('magento:consumer_liveness:'.$name.':'.$hhmm),
+            source: new SignalSource('magento'),
+            type: new SignalType('consumer_liveness'),
+            timestamp: new DateTimeImmutable('2026-06-30T'.$hhmm.':00+00:00'),
+            severity: SignalSeverity::info(),
+            entityReferences: [
+                new EntityReference('consumer', $name),
+                new EntityReference('queue', $queue),
+                new EntityReference('host', 'provado'),
+            ],
+            attributes: ['has_messages' => $hasMessages, 'running' => $running],
+            rawPayloadReference: new RawPayloadReference('consumer_liveness:'.$name.':'.$hhmm),
         );
     }
 

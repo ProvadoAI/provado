@@ -132,6 +132,71 @@ foreach ($typeList->getTypes() as $id => $type) {
     ]);
 }
 
-// --- signal: consumer liveness (Phase 3) --------------------------------------
-// Added in Phase 3: enumerate the message-queue consumers and probe liveness via
-// LockManagerInterface::isLocked(), shipping raw state for the cron→email edge.
+// --- signal: consumer_liveness ------------------------------------------------
+// The message-queue consumers cron is responsible for starting (the
+// consumers_runner cron job). For each, ship two raw facts: whether it has work
+// waiting (`has_messages`) and whether its run-lock is currently held (`running`).
+// A consumer with work but no running process is a silent dead consumer; under a
+// degraded cron that is the cron→email staleness symptom (transactional email is
+// drained by a consumer). These are exactly the two facts Magento's own
+// ConsumersRunner uses to decide whether to (re)start a consumer
+// (CheckIsAvailableMessagesInQueue + LockManagerInterface::isLocked), and the lock
+// keys mirror its logic: md5(name) for a single-process consumer, md5(name-i) per
+// process when multiple_processes is configured. dwell is Provado's job.
+$deploymentConfig = $objectManager->get(\Magento\Framework\App\DeploymentConfig::class);
+
+if ($deploymentConfig->get('cron_consumers_runner/cron_run', true)) {
+    $allowedConsumers = $deploymentConfig->get('cron_consumers_runner/consumers', []);
+    $allowedConsumers = is_array($allowedConsumers) ? $allowedConsumers : [];
+    $multipleProcesses = $deploymentConfig->get('cron_consumers_runner/multiple_processes', []);
+    $multipleProcesses = is_array($multipleProcesses) ? $multipleProcesses : [];
+
+    $consumerConfig = $objectManager->get(\Magento\Framework\MessageQueue\Consumer\ConfigInterface::class);
+    $lockManager = $objectManager->get(\Magento\Framework\Lock\LockManagerInterface::class);
+    $availableMessages = $objectManager->get(\Magento\MessageQueue\Model\CheckIsAvailableMessagesInQueue::class);
+
+    foreach ($consumerConfig->getConsumers() as $consumer) {
+        $name = $consumer->getName();
+
+        // An empty allow-list means the runner runs every consumer; otherwise only
+        // the listed ones are cron's responsibility.
+        if ($allowedConsumers !== [] && ! in_array($name, $allowedConsumers, true)) {
+            continue;
+        }
+
+        // The queue this consumer drains — shipped so Provado can tie a dead consumer
+        // to its queue_backlog symptom by the real link (a consumer's name and its
+        // queue name frequently differ, e.g. exportProcessor → "export").
+        $queue = $consumer->getQueue();
+
+        try {
+            $hasMessages = $availableMessages->execute($consumer->getConnection(), $queue) ? 1 : 0;
+        } catch (\Throwable $e) {
+            // Can't probe this queue (e.g. broker unreachable). Report no work so the
+            // shipper still completes, but surface it on STDERR — silently shipping 0
+            // would mask a backed-up consumer (a false negative on the very failure
+            // this signal exists to catch).
+            fwrite(STDERR, 'consumer_liveness: message probe failed for '.$name.' (queue '.$queue.'): '.$e->getMessage().PHP_EOL);
+            $hasMessages = 0;
+        }
+
+        $running = 0;
+        if (isset($multipleProcesses[$name])) {
+            for ($i = 1; $i <= (int) $multipleProcesses[$name]; $i++) {
+                if ($lockManager->isLocked(md5($name.'-'.$i))) { // mirrors ConsumersRunner
+                    $running = 1;
+                    break;
+                }
+            }
+        } elseif ($lockManager->isLocked(md5($name))) { // mirrors ConsumersRunner single-process key
+            $running = 1;
+        }
+
+        ship('consumer_liveness', $source, [
+            'consumer' => $name,
+            'queue' => $queue,
+            'has_messages' => $hasMessages,
+            'running' => $running,
+        ]);
+    }
+}

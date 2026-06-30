@@ -175,6 +175,34 @@ class NewRelicPayloadMapperTest extends TestCase
         $this->assertArrayNotHasKey('cache', $signal->attributes);
     }
 
+    public function test_consumer_liveness_event_maps_the_consumer_to_an_entity(): void
+    {
+        // The Instrument shipper emits one consumer_liveness event per consumer with
+        // has_messages/running flags; the reader must treat `consumer` as an entity
+        // dimension so each consumer is its own series.
+        $signal = (new NewRelicPayloadMapper())->mapProvadoSignalEvent(
+            [
+                'signal' => 'consumer_liveness',
+                'source' => 'magento',
+                'consumer' => 'exportProcessor',
+                'queue' => 'export',
+                'has_messages' => 1,
+                'running' => 0,
+                'timestamp' => 1_700_000_000_000,
+            ],
+            ['store', 'indexer', 'queue', 'cache', 'consumer', 'cron_job', 'host'],
+            0,
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+        );
+
+        // Both the consumer and the queue it drains map to entities (the queue link
+        // lets Provado dedup the consumer symptom against its queue_backlog symptom).
+        $this->assertTrue($signal->hasEntity(new EntityReference('consumer', 'exportProcessor')));
+        $this->assertTrue($signal->hasEntity(new EntityReference('queue', 'export')));
+        $this->assertSame(['has_messages' => 1, 'running' => 0], $signal->attributes);
+        $this->assertArrayNotHasKey('consumer', $signal->attributes);
+    }
+
     public function test_provado_signal_event_excludes_new_relic_internal_attributes(): void
     {
         $signal = (new NewRelicPayloadMapper())->mapProvadoSignalEvent(

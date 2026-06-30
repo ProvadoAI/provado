@@ -131,6 +131,7 @@ gets a source query/CLI and a `ProvadoSignal` shape. Ordered by leverage; build 
 | `indexer_status` | `mview_state` vs `MAX(*_cl.version_id)`, `indexer_state` | backlog, stuck, invalid |
 | `queue_backlog` | `queue_message_status` (+ RabbitMQ `/api/queues`) | ready, unacked, ack_rate, consumers |
 | `cache_validity` | `getInvalidated()` (Instrument shipper) | one event per cache type: `cache` (entity), `invalidated` (0/1) |
+| `consumer_liveness` | consumer config + `isLocked()` (Instrument shipper) | one event per consumer: `consumer` + `queue` (entities), `has_messages` (0/1), `running` (0/1) |
 | `schema_drift` | `setup_module` schema vs data version | mismatched_modules |
 | `maintenance_flag` | `var/.maintenance.flag` stat | present (0/1) |
 | `order_integrity` | `quote` fingerprint, `sales_payment_transaction` aging | orphaned_quotes, uncaptured_aging |

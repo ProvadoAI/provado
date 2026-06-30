@@ -3,7 +3,7 @@
 Audience: Engineering (Martin) and product team  
 Status: Working conclusion for the Alpha build-up period. Intended as a starting point for architecture work, not a final spec.  
 Date: June 2, 2026  
-Revision: v2 — reframes AI-discovery as a symptom signal feeding the one correlation engine (not a separate "Thesis B"); Tier 4 re-justified on friction grounds only.
+Revision: v3 — realigns the ingestion layer and Tier 0 to the signal catalog (`docs/simulations/Provado Signals and diagnosis.md` — the 12 failure modes — and `…- Additional.md` — the 7 operational signals). The diagnostic signals are Magento operational state (DB/CLI/internal APIs/filesystem/logs) plus the New Relic *change spine* and the PSP — not APM transaction telemetry or REST orders, which are only the symptom and commerce-state layers. v2 — reframes AI-discovery as a symptom signal feeding the one correlation engine (not a separate "Thesis B"); Tier 4 re-justified on friction grounds only.
 
 ---
 
@@ -25,7 +25,31 @@ These three layers are present in every current Provado document — the market 
 
 ### 1. Ingestion (connector layer)
 
-Authenticated, rate-limited, retry-handling clients against the v1 sources: New Relic via NerdGraph and Adobe Commerce via its REST API. Includes Adobe Commerce Cloud tier detection (Pro vs. Starter), because the available signal envelope differs by tier. This is the foundation everything else sits on; no diagnostic capability exists without it. (Maps to Q3 Goal 2.)
+Authenticated, rate-limited, retry-handling, **read-only** collectors against the sources that
+actually carry the diagnostic signals. Per the signal catalog (`docs/simulations/Provado Signals
+and diagnosis.md` — the 12 failure modes — and `…- Additional.md` — the 7 operational signals),
+those signals are **Magento application-domain state, not runtime transaction telemetry**
+("Generic APM reads none of them"):
+
+- **Magento operational state (primary signal source).** Read directly from the commerce system:
+  DB tables (`cron_schedule`, `indexer_state`/`mview_state`, `core_config_data.updated_at`,
+  `quote`, `sales_payment_transaction`, `sales_order`/`sales_order_grid`, `setup_module`,
+  `magento_operation`/`magento_bulk`), Magento CLI / internal APIs (`indexer:status`,
+  `setup:db:status`, `Cache\TypeListInterface::getInvalidated()`), the filesystem
+  (`var/.maintenance.flag`), application logs (`exception.log`/`system.log`), and MySQL engine
+  status (deadlock 1213/1205). The REST API exposes only a slice (orders, products, some
+  config/inventory); most operational state needs read-only DB access or an in-Magento collector
+  (the Additional doc's **Wire-Up** path), so **REST alone is insufficient**.
+- **New Relic — the symptom and the change spine.** NerdGraph/NRQL for the *symptom* (transaction
+  latency, error rate, throughput onset) and, critically, **deploy/change markers**
+  (`FROM Deployment` / change tracking) that timestamp "what changed". It reads *none* of the
+  operational signals — it sees consequences, not causes.
+- **Payment processor / gateway (payment integrity).** Stripe/Adyen/etc. capture, settlement, and
+  auth-expiry state, reconciled against Magento payment tables (failure modes #6 and #7).
+
+Includes Adobe Commerce edition/deployment detection (Open Source on-prem vs Cloud Pro/Starter),
+because the available signal envelope and access path differ. This layer is the foundation
+everything else sits on; no diagnostic capability exists without it. (Maps to Q3 Goal 2.)
 
 ### 2. Normalization (canonical signal model)
 
@@ -78,6 +102,8 @@ Do not build the content of these yet; define clean interfaces so they slot in o
 
 New Relic is the first source, not the only source. It is chosen for reach, not depth — it is bundled free into Adobe Commerce Cloud and is therefore already present on nearly every target merchant, giving zero-install time-to-first-value. It is not the richest possible signal source.
 
+**What New Relic is actually for, per the signal catalog: the symptom and the change spine — not the diagnosis.** It supplies transaction-level symptom onset (latency / error rate / throughput) and deploy/change markers (`FROM Deployment` / change tracking, the timeline spine for failure mode #5); it reads *none* of the 7 operational signals, which live in Magento's own state. The diagnostic signals come from the Magento-side collector, not from New Relic — so scoping New Relic to its symptom-and-marker role is exactly what keeps it swappable.
+
 The canonical signal model (layer 2) is what guarantees New Relic is a starting point rather than a cage. If New Relic's response shapes leak upward into diagnostic logic, we trap ourselves. If everything above the adapter reasons over the canonical model, New Relic becomes additive and swappable by design. Do not let any vendor's data shapes contaminate the layers above the adapter seam.
 
 ---
@@ -90,13 +116,33 @@ This is a research-and-readiness order and an adapter-design order — not a bui
 
 ---
 
-## Tier 0 — New Relic (NerdGraph) + Adobe Commerce REST (v1, decided)
+## Tier 0 — Magento operational state + New Relic (symptom & change spine) + Adobe Commerce REST + PSP
 
-Friction: Zero. Already present on the merchant (New Relic bundled into Adobe Commerce Cloud; Adobe Commerce REST is the commerce system of record).
+Friction: Low–moderate. New Relic is already present (bundled into Adobe Commerce Cloud) and
+Adobe Commerce REST is the commerce system of record — but the **Magento operational-state
+collector**, the source that actually carries the diagnostic signals, needs read-only DB access
+and/or an in-Magento Wire-Up module/CLI on the merchant's instance. Payment integrity adds the
+processor (Stripe/Adyen) earlier than its later-tier "richness" placement would suggest, because
+failure modes #6/#7 need it.
 
-Unlocks: Backend and commerce-logic failure modes — payment-module config regressions, catalog/feed sync failures, deploy-correlated slowdowns, admin-API timeouts.
+Unlocks: The 7 operational signals and the backend/commerce-logic failure modes in the catalog —
+silent consumer/queue death, inventory drift, promotion/price-rule breakage, indexer/cache
+staleness, deploy/config regression, silent order loss, authorized-not-captured payments, and
+cross-system sync stoppage. These are diagnosable only from Magento's own operational state (plus
+the New Relic change spine and, for payment integrity, the PSP) — **not** from APM transaction
+telemetry or REST orders alone.
 
-Note: The v1 lead pattern must be one that is fully diagnosable from these two sources alone (e.g. the 3DS/payment-config regression). Patterns that require client-side signal wait for Tier 1.
+Collection mechanism (per the Additional doc): most signals are **Wire-Up** — already queryable,
+read read-only from DB/CLI/internal APIs; the work is collection + correlation, not instrumentation.
+A few (consumer liveness, search-engine cluster health) straddle **Instrument**. The durable value
+is not the ingestion but the four layers on top that New Relic / generic APM do not ship —
+**semantics, cross-signal correlation by Magento's dependency graph, dwell-over-state, and stamping
+each onset against the deploy/config timeline**.
+
+Note: the v1 lead pattern must be fully diagnosable from these Tier 0 sources (e.g. cron death →
+cache/index/email staleness collapse, or the silent-order-loss quote fingerprint:
+`reserved_order_id` set, `is_active = 1`, no matching `sales_order`). Client-side signals wait for
+Tier 1.
 
 ---
 
@@ -146,4 +192,15 @@ Let the first design partner reorder Tiers 1–4. The friction ordering is the d
 
 ## One-line summary
 
-Ingestion, normalization, and correlation are mandatory and present in every current document — start there now. The correlation engine is signal-source-agnostic: backend, commerce-state, and AI-discovery-failure signals all feed the one engine (AI-discovery is a symptom signal, not a separate thesis). Stub pattern contents, dimension logic, output, and attribution behind clean interfaces. Integrate sources in friction order: New Relic + Adobe REST → CrUX then RUM/Sentry → payment processor → analytics/ad spend → AI-visibility/edge logs, ordering purely by friction-to-access and failure-modes-unlocked, treating New Relic as source #1 of N and keeping it swappable behind the canonical signal model.
+Ingestion, normalization, and correlation are mandatory — start there. Per the signal catalog
+(`docs/simulations/Provado Signals and diagnosis*.md`), the diagnostic signals are **Magento
+operational state** (DB / CLI / internal APIs / filesystem / logs) plus the New Relic change spine
+and the PSP — *not* APM transaction telemetry or REST orders, which are only the symptom and
+commerce-state layers ("generic APM reads none of them"). So Tier 0 is the Magento
+operational-state collector + New Relic (symptom + deploy markers) + Adobe REST + PSP for payment
+integrity. The correlation engine is signal-source-agnostic and is where the real value sits —
+**ingestion is not diagnosis**: learn-normal baselines, dwell over state, collapse by Magento's
+dependency graph, and stamp onsets against the deploy/config timeline. Stub pattern contents,
+dimension logic, output, and attribution behind clean interfaces. Later tiers follow in friction
+order: CrUX/RUM → analytics/ad spend → AI-visibility/edge logs. (AI-discovery remains a symptom
+signal feeding the one engine, not a separate thesis.)

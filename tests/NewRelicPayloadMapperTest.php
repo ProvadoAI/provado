@@ -151,6 +151,30 @@ class NewRelicPayloadMapperTest extends TestCase
         $this->assertSame('2023-11-14', $signal->timestamp->format('Y-m-d'));
     }
 
+    public function test_provado_signal_event_excludes_new_relic_internal_attributes(): void
+    {
+        $signal = (new NewRelicPayloadMapper())->mapProvadoSignalEvent(
+            [
+                'signal' => 'cron_health',
+                'source' => 'magento',
+                'host' => 'provado',
+                'error' => 2865,
+                'pending' => 391,
+                // New Relic agent auto-adds these to custom events.
+                'appId' => 999121426,
+                'realAgentId' => 999122235,
+            ],
+            ['store', 'host', 'cron_job'],
+            0,
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+        );
+
+        $this->assertTrue($signal->hasEntity(new EntityReference('host', 'provado')));
+        $this->assertSame(['error' => 2865, 'pending' => 391], $signal->attributes);
+        $this->assertArrayNotHasKey('appId', $signal->attributes);
+        $this->assertArrayNotHasKey('realAgentId', $signal->attributes);
+    }
+
     public function test_provado_signal_event_falls_back_to_source_entity(): void
     {
         $signal = (new NewRelicPayloadMapper())->mapProvadoSignalEvent(

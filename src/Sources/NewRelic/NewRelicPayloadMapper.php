@@ -30,6 +30,14 @@ final readonly class NewRelicPayloadMapper
     private const SEVERITY_VALUES = ['info', 'warning', 'error', 'critical'];
 
     /**
+     * Attributes the New Relic agent / platform auto-adds to custom events. They
+     * are not shipped metrics and must not leak into a signal's attributes.
+     *
+     * @var list<string>
+     */
+    private const NEW_RELIC_RESERVED_ATTRIBUTES = ['appId', 'appName', 'realAgentId', 'entityGuid', 'entity.guid'];
+
+    /**
      * @param array<string, mixed> $payload
      */
     public function map(array $payload, ?string $rawPayloadLocation = null): Signal
@@ -174,7 +182,15 @@ final readonly class NewRelicPayloadMapper
         $sourceValue = is_string($source) && trim($source) !== '' ? trim($source) : 'magento';
 
         $entityReferences = $this->provadoSignalEntities($event, $entityFields, $sourceValue);
-        $attributes = $this->numericAttributes($event, array_merge(['signal', 'source', 'timestamp'], $entityFields));
+        // The New Relic PHP agent auto-decorates custom events with internal
+        // attributes (appId, realAgentId, …); exclude them so only shipped metrics
+        // become signal attributes.
+        $reserved = array_merge(
+            ['signal', 'source', 'timestamp'],
+            self::NEW_RELIC_RESERVED_ATTRIBUTES,
+            $entityFields,
+        );
+        $attributes = $this->numericAttributes($event, $reserved);
 
         if ($attributes === []) {
             throw new InvalidArgumentException('ProvadoSignal event must include at least one numeric metric.');

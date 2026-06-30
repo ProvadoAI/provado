@@ -35,6 +35,9 @@ return [
             'enabled' => env('PROVADO_NEW_RELIC_ENABLED', false),
             'options' => [
                 'account_id' => env('PROVADO_NEW_RELIC_ACCOUNT_ID'),
+                // 'transaction_health' (default, APM transactions) or
+                // 'operational_signals' (reads ProvadoSignal custom events).
+                'mode' => env('PROVADO_NEW_RELIC_MODE', 'transaction_health'),
             ],
             'credentials' => [
                 'api_key' => env('PROVADO_NEW_RELIC_API_KEY'),

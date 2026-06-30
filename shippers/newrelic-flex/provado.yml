@@ -1,0 +1,27 @@
+# Provado signal shipper — New Relic Flex (nri-flex). Config-driven, no code.
+#
+# Install nri-flex (bundled with the New Relic infrastructure agent) and drop this
+# file under the agent's integrations.d/ directory. Use a read-only MySQL user.
+# Each query returns ONE row, shipped as one ProvadoSignal custom event whose
+# columns are the named metrics — the same shape the other shippers emit.
+integrations:
+  - name: nri-flex
+    config:
+      name: provado-magento
+      apis:
+        - name: ProvadoCronHealth
+          event_type: ProvadoSignal
+          database: mysql
+          db_conn: "ro_user:PASSWORD@tcp(127.0.0.1:3306)/magento"
+          custom_attributes:
+            signal: cron_health
+            source: magento
+          queries:
+            - run: >
+                SELECT
+                  SUM(status = 'pending') AS pending,
+                  SUM(status = 'running') AS running,
+                  SUM(status = 'success') AS success,
+                  SUM(status = 'missed')  AS missed,
+                  SUM(status = 'error')   AS error
+                FROM cron_schedule

@@ -31,10 +31,12 @@ you use. Ordered by leverage:
 |---|---|---|
 | `cron_health` | `cron_schedule` status counts | pending, running, success, missed, error |
 | `indexer_status` | per view: `MAX(<view>_cl.version_id)` − `mview_state.version_id`, `indexer_state` | one event per `indexer`: backlog, working, invalid |
-| `queue_backlog` *(planned)* | `queue_message_status` (+ RabbitMQ `/api/queues`) | ready, unacked, consumers |
+| `queue_backlog` | RabbitMQ mgmt API `/api/queues` per queue (+ DB `queue_message_status` fallback) | one event per `queue`: ready, unacked, consumers |
 
-> `indexer_status` emits one `ProvadoSignal` per scheduled view (entity `indexer`), so it uses
-> the php-agent or Event API path — the per-view changelog backlog isn't a single Flex query.
+> `indexer_status` and `queue_backlog` emit one `ProvadoSignal` per entity (view / queue), so they
+> use the php-agent or Event API path, not a single Flex query. `queue_backlog` reads the RabbitMQ
+> management API — configure `PROVADO_RABBITMQ_URL` / `PROVADO_RABBITMQ_USER` / `PROVADO_RABBITMQ_PASS`
+> (defaults `http://localhost:15672`, `guest`/`guest`).
 
 ## Scheduling
 

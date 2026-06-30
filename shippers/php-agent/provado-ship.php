@@ -85,3 +85,48 @@ foreach ($views as $view) {
         'invalid' => ($indexerState[$view['view_id']] ?? '') === 'invalid' ? 1 : 0,
     ]);
 }
+
+// --- signal: queue_backlog -------------------------------------------------
+// Per RabbitMQ queue: ready/unacked backlog + consumer liveness. consumers > 0
+// with ready > 0 and a flat ack rate is alive-but-stalled; consumers = 0 with
+// ready > 0 is disconnected. (Magento may also use the DB queue; queue_message_status
+// is shipped as a fallback summary.)
+$rabbitUrl  = getenv('PROVADO_RABBITMQ_URL')  ?: 'http://localhost:15672';
+$rabbitUser = getenv('PROVADO_RABBITMQ_USER') ?: 'guest';
+$rabbitPass = getenv('PROVADO_RABBITMQ_PASS') ?: 'guest';
+
+$ctx = stream_context_create(['http' => [
+    'timeout' => 10,
+    'ignore_errors' => true,
+    'header' => 'Authorization: Basic '.base64_encode($rabbitUser.':'.$rabbitPass),
+]]);
+$queuesJson = @file_get_contents($rabbitUrl.'/api/queues', false, $ctx);
+$queues = is_string($queuesJson) ? json_decode($queuesJson, true) : null;
+
+if (is_array($queues)) {
+    foreach ($queues as $queue) {
+        if (! is_array($queue) || ! isset($queue['name']) || ! is_string($queue['name'])) {
+            continue;
+        }
+
+        ship('queue_backlog', $source, [
+            'queue'     => $queue['name'],
+            'ready'     => (int) ($queue['messages_ready'] ?? 0),
+            'unacked'   => (int) ($queue['messages_unacknowledged'] ?? 0),
+            'consumers' => (int) ($queue['consumers'] ?? 0),
+        ]);
+    }
+}
+
+// DB-queue fallback: queue_message_status counts (status 2 = NEW piling up = backlog).
+$dbQueue = $pdo->query("SELECT status, COUNT(*) AS c FROM {$prefix}queue_message_status GROUP BY status")
+    ->fetchAll(PDO::FETCH_KEY_PAIR);
+
+if ($dbQueue !== []) {
+    ship('queue_backlog', $source, [
+        'queue'       => 'db',
+        'new'         => (int) ($dbQueue[2] ?? 0),
+        'in_progress' => (int) ($dbQueue[3] ?? 0),
+        'error'       => (int) ($dbQueue[6] ?? 0),
+    ]);
+}

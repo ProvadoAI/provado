@@ -104,26 +104,38 @@ final readonly class NerdGraphClient implements NewRelicClient
             );
         }
 
-        $request = $this->buildRequest($config, $window, $accountId, $apiKey);
+        // A source can read more than one query mode (e.g. transaction_health AND
+        // operational_signals); each is its own NerdGraph call, combined into one
+        // result. A failing mode is isolated and does not drop the others.
+        $signals = [];
+        $errors = [];
 
-        try {
-            $response = $this->httpClient->send($request);
-        } catch (HttpTransportException $exception) {
-            return SourceFetchResult::empty()->withErrors([
-                $this->errorFactory->fromTransportException(self::SOURCE_NAME, $request, $exception),
-            ]);
+        foreach ($this->modes($config) as $mode) {
+            $request = $this->buildRequest($config, $window, $accountId, $apiKey, $mode);
+
+            try {
+                $response = $this->httpClient->send($request);
+            } catch (HttpTransportException $exception) {
+                $errors[] = $this->errorFactory->fromTransportException(self::SOURCE_NAME, $request, $exception);
+
+                continue;
+            }
+
+            if (! $response->isSuccessful()) {
+                $errors[] = $this->errorFactory->fromResponse(self::SOURCE_NAME, $request, $response);
+
+                continue;
+            }
+
+            $result = $this->mapResponse($config, $window, $response, $mode);
+            $signals = array_merge($signals, $result->signals());
+            $errors = array_merge($errors, $result->errors());
         }
 
-        if (! $response->isSuccessful()) {
-            return SourceFetchResult::empty()->withErrors([
-                $this->errorFactory->fromResponse(self::SOURCE_NAME, $request, $response),
-            ]);
-        }
-
-        return $this->mapResponse($config, $window, $response);
+        return new SourceFetchResult($signals, $errors);
     }
 
-    private function buildRequest(SourceConfig $config, TimeWindow $window, int $accountId, string $apiKey): HttpRequest
+    private function buildRequest(SourceConfig $config, TimeWindow $window, int $accountId, string $apiKey, string $mode): HttpRequest
     {
         return new HttpRequest(
             method: 'POST',
@@ -136,13 +148,44 @@ final readonly class NerdGraphClient implements NewRelicClient
                 'query' => self::GRAPHQL_QUERY,
                 'variables' => [
                     'accountId' => $accountId,
-                    'nrql' => $this->nrql($config, $window),
+                    'nrql' => $this->nrql($config, $window, $mode),
                 ],
             ],
         );
     }
 
-    private function mapResponse(SourceConfig $config, TimeWindow $window, HttpResponse $response): SourceFetchResult
+    /**
+     * The query modes this source reads. Accepts `modes` (a list or comma string)
+     * or the singular `mode`; defaults to transaction_health.
+     *
+     * @return list<string>
+     */
+    private function modes(SourceConfig $config): array
+    {
+        $modes = $config->option('modes', $config->option('mode'));
+
+        if (is_string($modes)) {
+            $modes = explode(',', $modes);
+        }
+
+        if (is_array($modes)) {
+            $valid = [];
+
+            foreach ($modes as $mode) {
+                if (is_string($mode) && trim($mode) !== '') {
+                    $valid[] = trim($mode);
+                }
+            }
+
+            if ($valid !== []) {
+                return $valid;
+            }
+        }
+
+        return ['transaction_health'];
+    }
+
+    private function mapResponse(SourceConfig $config, TimeWindow $window, HttpResponse $response, string $mode): SourceFetchResult
     {
         try {
             $decoded = $response->json();
@@ -175,7 +218,7 @@ final readonly class NerdGraphClient implements NewRelicClient
             );
         }
 
-        $operational = $this->isOperationalMode($config);
+        $operational = $mode === self::MODE_OPERATIONAL;
         $type = $operational ? null : new SignalType($this->signalType($config));
         $facetEntities = $operational ? [] : $this->facetEntities($config);
         $signalEntityFields = $operational ? $this->signalEntityFields($config) : [];
@@ -228,14 +271,9 @@ final readonly class NerdGraphClient implements NewRelicClient
         return is_string($endpoint) && trim($endpoint) !== '' ? trim($endpoint) : self::DEFAULT_ENDPOINT;
     }
 
-    private function isOperationalMode(SourceConfig $config): bool
+    private function nrql(SourceConfig $config, TimeWindow $window, string $mode): string
     {
-        return $config->option('mode') === self::MODE_OPERATIONAL;
-    }
-
-    private function nrql(SourceConfig $config, TimeWindow $window): string
-    {
-        $default = $this->isOperationalMode($config) ? self::DEFAULT_PROVADO_SIGNAL_NRQL : self::DEFAULT_NRQL;
+        $default = $mode === self::MODE_OPERATIONAL ? self::DEFAULT_PROVADO_SIGNAL_NRQL : self::DEFAULT_NRQL;
         $nrql = $config->option('nrql', $default);
 
         if (! is_string($nrql) || trim($nrql) === '') {

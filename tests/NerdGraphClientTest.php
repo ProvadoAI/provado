@@ -98,6 +98,38 @@ class NerdGraphClientTest extends TestCase
         $this->assertSame(12, $signal->attributes['pending']);
     }
 
+    public function test_multiple_modes_run_both_queries_and_combine_signals(): void
+    {
+        // Mode order is [transaction_health, operational_signals]; the fake serves
+        // one response per request in order.
+        $transactionHealth = json_encode(['data' => ['actor' => ['account' => ['nrql' => ['results' => [
+            ['facet' => ['checkout-api', 'WebTransaction/Checkout'], 'throughput' => 10, 'duration_ms' => 1.5, 'error_rate' => 0],
+        ]]]]]]);
+        $operational = json_encode(['data' => ['actor' => ['account' => ['nrql' => ['results' => [
+            ['signal' => 'cron_health', 'source' => 'magento', 'store' => 'default', 'missed' => 3, 'timestamp' => 1_700_000_000_000],
+        ]]]]]]);
+
+        $http = (new FakeHttpClient())
+            ->respondWith(new HttpResponse(200, (string) $transactionHealth))
+            ->respondWith(new HttpResponse(200, (string) $operational));
+
+        $config = new SourceConfig(
+            name: 'new_relic',
+            enabled: true,
+            options: ['account_id' => '123456', 'modes' => ['transaction_health', 'operational_signals']],
+            credentials: new SourceCredentials(['api_key' => 'nr-secret']),
+        );
+
+        $result = (new NerdGraphClient($http))->fetch($config, $this->timeWindow());
+
+        $this->assertCount(2, $http->sentRequests());
+        $this->assertSame([], $result->errors());
+
+        $types = array_map(static fn ($s) => $s->type->value, $result->signals());
+        $this->assertContains('transaction_health', $types);
+        $this->assertContains('cron_health', $types);
+    }
+
     public function test_row_without_facet_is_reported_as_invalid_row(): void
     {
         $body = json_encode([

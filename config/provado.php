@@ -35,9 +35,12 @@ return [
             'enabled' => env('PROVADO_NEW_RELIC_ENABLED', false),
             'options' => [
                 'account_id' => env('PROVADO_NEW_RELIC_ACCOUNT_ID'),
-                // 'transaction_health' (default, APM transactions) or
-                // 'operational_signals' (reads ProvadoSignal custom events).
-                'mode' => env('PROVADO_NEW_RELIC_MODE', 'transaction_health'),
+                // Comma-separated query modes to read in one fetch. Each runs its
+                // own NerdGraph query and the signals are combined:
+                //   'transaction_health'  — APM transactions (the symptom layer)
+                //   'operational_signals' — ProvadoSignal custom events
+                // e.g. PROVADO_NEW_RELIC_MODES=transaction_health,operational_signals
+                'modes' => env('PROVADO_NEW_RELIC_MODES', 'transaction_health'),
             ],
             'credentials' => [
                 'api_key' => env('PROVADO_NEW_RELIC_API_KEY'),

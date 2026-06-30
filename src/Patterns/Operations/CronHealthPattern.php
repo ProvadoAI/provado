@@ -6,6 +6,7 @@ namespace Mquevedob\Provado\Patterns\Operations;
 
 use Mquevedob\Provado\Core\Signal;
 use Mquevedob\Provado\Correlation\CorrelationGroup;
+use Mquevedob\Provado\Diagnosis\SignalSeries;
 use Mquevedob\Provado\Patterns\DiagnosticEvidence;
 use Mquevedob\Provado\Patterns\DiagnosticFinding;
 use Mquevedob\Provado\Patterns\DiagnosticFindingId;
@@ -85,7 +86,7 @@ final readonly class CronHealthPattern implements DiagnosticPattern
         $running = $this->metric($cron, 'running');
 
         // Healthy cron: nothing missed, backlog and errors within bounds.
-        if ($missed === 0 && $pending <= self::PENDING_BACKLOG && $error <= self::ERROR_ELEVATED) {
+        if (! $this->isCronUnhealthy($cron)) {
             return PatternEvaluationResult::none();
         }
 
@@ -123,6 +124,18 @@ final readonly class CronHealthPattern implements DiagnosticPattern
         );
     }
 
+    /**
+     * Cron is unhealthy when the scheduler is missing jobs, the pending backlog is
+     * past the keeping-up bound, or errored rows are elevated. Reused as the fire
+     * condition and as the "is this state bad?" predicate for dwell.
+     */
+    private function isCronUnhealthy(Signal $cron): bool
+    {
+        return $this->metric($cron, 'missed') > 0
+            || $this->metric($cron, 'pending') > self::PENDING_BACKLOG
+            || $this->metric($cron, 'error') > self::ERROR_ELEVATED;
+    }
+
     private function severity(int $missed, int $pending, int $error): DiagnosticFindingSeverity
     {
         if ($missed > 0) {
@@ -147,7 +160,10 @@ final readonly class CronHealthPattern implements DiagnosticPattern
     {
         $symptoms = [];
 
-        foreach ($group->signals as $signal) {
+        // Reduce to current state per entity first: with continuous shipping the
+        // group holds many snapshots per indexer/queue, and a stale bad snapshot
+        // must not flag an entity whose latest reading is healthy.
+        foreach ((new SignalSeries($group->signals))->latestPerEntity() as $signal) {
             if ($signal->type->value === self::INDEXER_STATUS
                 && ($this->metric($signal, 'backlog') > 0 || $this->metric($signal, 'invalid') > 0)) {
                 $symptoms[] = 'indexer '.$this->entityId($signal, 'indexer');

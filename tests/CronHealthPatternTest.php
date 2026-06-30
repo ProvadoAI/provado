@@ -86,6 +86,41 @@ class CronHealthPatternTest extends TestCase
         $this->assertSame(120, $finding->evidence['latest_config_change_age_seconds']);
     }
 
+    public function test_stale_snapshot_does_not_flag_an_entity_that_is_healthy_now(): void
+    {
+        // Continuous shipping: the window holds several snapshots per indexer. An
+        // indexer that was in backlog earlier but is healthy in its latest snapshot
+        // must not be attributed as a downstream symptom.
+        $group = new CorrelationGroup([
+            $this->cron(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855]),
+            $this->indexerAt('catalogsearch_fulltext', 120, '14:50'), // stale: was backlogged
+            $this->indexerAt('catalogsearch_fulltext', 0, '15:00'),   // latest: healthy now
+            $this->indexerAt('catalog_product_price', 90, '15:00'),   // latest: still backlogged
+        ]);
+
+        $symptoms = (new CronHealthPattern())->evaluate($group)->findings()[0]->evidence['downstream_symptoms'];
+
+        $this->assertNotContains('indexer catalogsearch_fulltext', $symptoms);
+        $this->assertContains('indexer catalog_product_price', $symptoms);
+    }
+
+    private function indexerAt(string $view, int $backlog, string $hhmm): Signal
+    {
+        return new Signal(
+            id: new SignalId('magento:indexer_status:'.$view.':'.$hhmm),
+            source: new SignalSource('magento'),
+            type: new SignalType('indexer_status'),
+            timestamp: new DateTimeImmutable('2026-06-30T'.$hhmm.':00+00:00'),
+            severity: SignalSeverity::info(),
+            entityReferences: [
+                new EntityReference('indexer', $view),
+                new EntityReference('host', 'provado'),
+            ],
+            attributes: ['backlog' => $backlog, 'invalid' => 0, 'working' => 0],
+            rawPayloadReference: new RawPayloadReference('indexer_status:'.$view.':'.$hhmm),
+        );
+    }
+
     /**
      * @param array<string, int> $metrics
      */

@@ -73,6 +73,24 @@ class CronHealthPatternTest extends TestCase
         $this->assertStringContainsString('attributed to it', $finding->summary);
     }
 
+    public function test_downstream_collapse_is_dwell_qualified_and_declares_dark_edges(): void
+    {
+        // The same indexer is in backlog across two polls → dwell 300s. The graph
+        // also declares the still-dark cache/email edges.
+        $group = new CorrelationGroup([
+            $this->cron(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855]),
+            $this->indexerAt('catalogsearch_fulltext', 120, '14:55'),
+            $this->indexerAt('catalogsearch_fulltext', 130, '15:00'),
+        ]);
+
+        $finding = (new CronHealthPattern())->evaluate($group)->findings()[0];
+
+        $this->assertContains('indexer catalogsearch_fulltext', $finding->evidence['downstream_symptoms']);
+        $this->assertSame(300, $finding->evidence['downstream_dwell_seconds']['indexer catalogsearch_fulltext']);
+        $this->assertSame(['index', 'queue'], $finding->evidence['dependency_graph']['lit']);
+        $this->assertSame(['cache', 'email'], $finding->evidence['dependency_graph']['dark']);
+    }
+
     public function test_recent_config_change_is_stamped(): void
     {
         $group = new CorrelationGroup([

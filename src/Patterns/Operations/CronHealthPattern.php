@@ -6,6 +6,8 @@ namespace Mquevedob\Provado\Patterns\Operations;
 
 use Mquevedob\Provado\Core\Signal;
 use Mquevedob\Provado\Correlation\CorrelationGroup;
+use Mquevedob\Provado\Diagnosis\DependencyEdge;
+use Mquevedob\Provado\Diagnosis\DependencyGraph;
 use Mquevedob\Provado\Diagnosis\SignalSeries;
 use Mquevedob\Provado\Patterns\DiagnosticEvidence;
 use Mquevedob\Provado\Patterns\DiagnosticFinding;
@@ -123,13 +125,14 @@ final readonly class CronHealthPattern implements DiagnosticPattern
         }
 
         $downstream = $this->downstreamSymptoms($series);
+        $downstreamLabels = array_column($downstream, 'label');
 
         return PatternEvaluationResult::fromFindings([
             new DiagnosticFinding(
                 id: DiagnosticFindingId::fromPatternAndCorrelation($this->id(), $group->id),
                 patternId: $this->id(),
                 title: 'Cron health degraded',
-                summary: $this->summary($missed, $pending, $error, $running, $runningStuck, $runningDwell, $downstream),
+                summary: $this->summary($missed, $pending, $error, $running, $runningStuck, $runningDwell, $downstreamLabels),
                 severity: $this->severity($missed, $pendingElevated, $errorElevated, $runningStuck),
                 correlationId: $group->id,
                 evidence: $this->evidence($group, $series, $cron, $missed, $pending, $error, $running, $runningDwell, $runningStuck, $downstream),
@@ -240,35 +243,75 @@ final readonly class CronHealthPattern implements DiagnosticPattern
     }
 
     /**
-     * Downstream symptoms that co-occur with the cron degradation and are
-     * collapsed into this one verdict instead of separate alerts.
+     * Downstream symptoms that co-occur with the cron degradation and collapse into
+     * this one verdict instead of separate alerts. Attribution is driven by the
+     * explicit dependency graph (no per-type conditional) and is dwell-qualified —
+     * each symptom carries how long it has persisted.
      *
-     * @return list<string>
+     * @return list<array{label: string, dwell_seconds: int}>
      */
     private function downstreamSymptoms(SignalSeries $series): array
     {
+        $graph = $this->cronDependencyGraph();
         $symptoms = [];
 
         // Reduce to current state per entity first: with continuous shipping the
         // group holds many snapshots per indexer/queue, and a stale bad snapshot
         // must not flag an entity whose latest reading is healthy.
         foreach ($series->latestPerEntity() as $signal) {
-            if ($signal->type->value === self::INDEXER_STATUS
-                && ($this->metric($signal, 'backlog') > 0 || $this->metric($signal, 'invalid') > 0)) {
-                $symptoms[] = 'indexer '.$this->entityId($signal, 'indexer');
+            $edge = $graph->edgeForSignalType($signal->type->value);
+
+            if ($edge === null || ! $this->isSymptomatic($edge, $signal)) {
+                continue;
             }
 
-            if ($signal->type->value === self::QUEUE_BACKLOG
-                && $this->metric($signal, 'ready') > 0 && $this->metric($signal, 'consumers') === 0) {
-                $symptoms[] = 'queue '.$this->entityId($signal, 'queue');
-            }
+            $label = $edge->entityType.' '.$this->entityId($signal, $edge->entityType);
+
+            $symptoms[$label] = [
+                'label' => $label,
+                'dwell_seconds' => $series->dwellSeconds(
+                    $signal,
+                    fn (Signal $s): bool => $this->isSymptomatic($edge, $s),
+                ),
+            ];
         }
 
-        return array_values(array_unique($symptoms));
+        return array_values($symptoms);
     }
 
     /**
-     * @param list<string> $downstream
+     * The Magento dependency graph rooted at cron: cron is upstream of cache,
+     * index, email and queue (the architecture doc's lead pattern). Index and queue
+     * are lit — their `ProvadoSignal`s ship today. Cache and email are declared but
+     * dark: they await an "Instrument" signal (cache invalidation / consumer
+     * liveness) and light up by supplying it, with no graph redesign.
+     */
+    private function cronDependencyGraph(): DependencyGraph
+    {
+        return new DependencyGraph('cron', [
+            DependencyEdge::lit('index', 'indexer', self::INDEXER_STATUS),
+            DependencyEdge::lit('queue', 'queue', self::QUEUE_BACKLOG),
+            DependencyEdge::dark('cache', 'cache'),
+            DependencyEdge::dark('email', 'consumer'),
+        ]);
+    }
+
+    /**
+     * Whether a downstream signal is currently symptomatic for its edge. Edge
+     * semantics: an indexer in backlog or invalid; a queue with work ready but no
+     * consumer draining it (disconnected). A newly-lit edge adds its arm here.
+     */
+    private function isSymptomatic(DependencyEdge $edge, Signal $signal): bool
+    {
+        return match ($edge->node) {
+            'index' => $this->metric($signal, 'backlog') > 0 || $this->metric($signal, 'invalid') > 0,
+            'queue' => $this->metric($signal, 'ready') > 0 && $this->metric($signal, 'consumers') === 0,
+            default => false,
+        };
+    }
+
+    /**
+     * @param list<array{label: string, dwell_seconds: int}> $downstream
      * @return array<string, mixed>
      */
     private function evidence(
@@ -283,6 +326,8 @@ final readonly class CronHealthPattern implements DiagnosticPattern
         bool $runningStuck,
         array $downstream,
     ): array {
+        $graph = $this->cronDependencyGraph();
+
         $evidence = $this->baseEvidence($group);
         $evidence['cron'] = [
             'pending' => $pending,
@@ -297,7 +342,15 @@ final readonly class CronHealthPattern implements DiagnosticPattern
         $evidence['running_dwell_seconds'] = $runningDwell;
         $evidence['running_stuck'] = $runningStuck;
         $evidence['cron_baseline'] = $this->baselineEvidence($series, $cron);
-        $evidence['downstream_symptoms'] = $downstream;
+        $evidence['downstream_symptoms'] = array_column($downstream, 'label');
+        $evidence['downstream_dwell_seconds'] = array_column($downstream, 'dwell_seconds', 'label');
+        // Surface the whole graph, including edges declared but not yet fed by a
+        // signal (cache/email), so the collapse's coverage is explicit.
+        $evidence['dependency_graph'] = [
+            'upstream' => $graph->upstream,
+            'lit' => $graph->litEdges(),
+            'dark' => $graph->darkEdges(),
+        ];
 
         $config = $this->latestOfType($group, self::CONFIG_CHANGE);
 

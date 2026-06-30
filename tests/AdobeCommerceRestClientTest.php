@@ -65,6 +65,28 @@ class AdobeCommerceRestClientTest extends TestCase
         $this->assertTrue($signal->hasEntity(new EntityReference('store', '1')));
         $this->assertSame(2, $signal->attributes['order_count']);
         $this->assertSame(149.75, $signal->attributes['gross_total']);
+        // Per-status breakdown carried as attributes of the one order_activity signal.
+        $this->assertSame(1, $signal->attributes['count_complete']);
+        $this->assertSame(1, $signal->attributes['count_pending']);
+    }
+
+    public function test_orders_without_status_are_counted_as_unknown(): void
+    {
+        $body = json_encode([
+            'items' => [
+                ['entity_id' => 10, 'store_id' => 1, 'grand_total' => 10, 'status' => 'holded'],
+                ['entity_id' => 11, 'store_id' => 1, 'grand_total' => 20],
+            ],
+            'total_count' => 2,
+        ]);
+        $http = (new FakeHttpClient())->respondWith(new HttpResponse(200, (string) $body));
+
+        $result = (new AdobeCommerceRestClient($http))->fetch($this->credentialedConfig(), $this->timeWindow());
+
+        $attributes = $result->signals()[0]->attributes;
+        $this->assertSame(2, $attributes['order_count']);
+        $this->assertSame(1, $attributes['count_holded']);
+        $this->assertSame(1, $attributes['count_unknown']);
     }
 
     public function test_signed_query_encoding_matches_guzzle_wire_encoding(): void

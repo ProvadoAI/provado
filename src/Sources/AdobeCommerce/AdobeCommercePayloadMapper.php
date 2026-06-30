@@ -62,7 +62,7 @@ final readonly class AdobeCommercePayloadMapper
             }
 
             $storeId = $this->orderStoreId($order);
-            $byStore[$storeId] ??= ['count' => 0, 'gross' => 0.0];
+            $byStore[$storeId] ??= ['count' => 0, 'gross' => 0.0, 'statuses' => []];
             $byStore[$storeId]['count']++;
 
             // Magento may serialize monetary values as numbers or numeric strings.
@@ -71,6 +71,9 @@ final readonly class AdobeCommercePayloadMapper
             if (is_numeric($grandTotal)) {
                 $byStore[$storeId]['gross'] += (float) $grandTotal;
             }
+
+            $status = $this->orderStatus($order);
+            $byStore[$storeId]['statuses'][$status] = ($byStore[$storeId]['statuses'][$status] ?? 0) + 1;
         }
 
         $signals = [];
@@ -79,6 +82,20 @@ final readonly class AdobeCommercePayloadMapper
             // PHP casts numeric-string array keys to int, so coerce back to string.
             $storeId = (string) $storeId;
 
+            // One signal per store carrying the whole order-state snapshot: total,
+            // gross, and a per-status breakdown as count_<status> attributes. A
+            // single signal keeps the entity+time correlation sharp (status counts
+            // are facets of one observation, not independent events); severity
+            // escalation per status is left to the pattern layer.
+            $attributes = [
+                'order_count' => $aggregate['count'],
+                'gross_total' => round($aggregate['gross'], 2),
+            ];
+
+            foreach ($aggregate['statuses'] as $status => $count) {
+                $attributes['count_'.$status] = $count;
+            }
+
             $signals[] = new Signal(
                 id: new SignalId('adobe_commerce:order_activity:'.$storeId),
                 source: new SignalSource('adobe_commerce'),
@@ -86,15 +103,26 @@ final readonly class AdobeCommercePayloadMapper
                 timestamp: $timestamp,
                 severity: SignalSeverity::info(),
                 entityReferences: [new EntityReference('store', $storeId)],
-                attributes: [
-                    'order_count' => $aggregate['count'],
-                    'gross_total' => round($aggregate['gross'], 2),
-                ],
+                attributes: $attributes,
                 rawPayloadReference: new RawPayloadReference('order_activity:'.$storeId),
             );
         }
 
         return $signals;
+    }
+
+    /**
+     * @param array<string, mixed> $order
+     */
+    private function orderStatus(array $order): string
+    {
+        $status = $order['status'] ?? null;
+
+        if (is_string($status) && trim($status) !== '') {
+            return trim($status);
+        }
+
+        return 'unknown';
     }
 
     /**

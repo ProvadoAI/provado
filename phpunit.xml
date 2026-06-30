@@ -9,4 +9,23 @@
             <directory>tests</directory>
         </testsuite>
     </testsuites>
+    <php>
+        <!--
+            Isolate the suite from any real .env on the host (the lab server keeps
+            live credentials in .env, which testbench would otherwise load). These
+            force the package defaults — sources disabled, no credentials — so tests
+            never depend on, or fire against, a live environment. The artisan
+            commands run from the CLI still read the real .env.
+        -->
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="PROVADO_NEW_RELIC_ENABLED" value="false" force="true"/>
+        <env name="PROVADO_NEW_RELIC_ACCOUNT_ID" value="" force="true"/>
+        <env name="PROVADO_NEW_RELIC_API_KEY" value="" force="true"/>
+        <env name="PROVADO_ADOBE_COMMERCE_ENABLED" value="false" force="true"/>
+        <env name="PROVADO_ADOBE_COMMERCE_BASE_URL" value="" force="true"/>
+        <env name="PROVADO_ADOBE_COMMERCE_CONSUMER_KEY" value="" force="true"/>
+        <env name="PROVADO_ADOBE_COMMERCE_CONSUMER_SECRET" value="" force="true"/>
+        <env name="PROVADO_ADOBE_COMMERCE_ACCESS_TOKEN" value="" force="true"/>
+        <env name="PROVADO_ADOBE_COMMERCE_ACCESS_TOKEN_SECRET" value="" force="true"/>
+    </php>
 </phpunit>

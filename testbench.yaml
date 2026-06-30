@@ -1,0 +1,6 @@
+# Lets `vendor/bin/testbench <command>` boot a Laravel app with Provado's
+# service provider registered, so the package's artisan commands
+# (provado:diagnose, provado:signals) are runnable without a full host app.
+# Credentials are read from this directory's .env (gitignored, server-only).
+providers:
+  - Mquevedob\Provado\ProvadoServiceProvider

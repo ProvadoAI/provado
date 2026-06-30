@@ -7,6 +7,7 @@ use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\ServiceProvider;
 use Mquevedob\Provado\Config\ProvadoConfig;
 use Mquevedob\Provado\Console\DiagnoseCommand;
+use Mquevedob\Provado\Console\ShowSignalsCommand;
 use Mquevedob\Provado\Http\HttpClient;
 use Mquevedob\Provado\Http\LaravelHttpClient;
 use Mquevedob\Provado\Incidents\IncidentReportBuilder;
@@ -50,7 +51,7 @@ class ProvadoServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([DiagnoseCommand::class]);
+            $this->commands([DiagnoseCommand::class, ShowSignalsCommand::class]);
         }
     }
 

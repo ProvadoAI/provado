@@ -76,6 +76,19 @@ the internal ones and treats `host` as an entity.
 
 **Template:** [`../shippers/php-agent/provado-ship.php`](../shippers/php-agent/provado-ship.php)
 
+### Variant — "Instrument" (bootstrapped) shipper
+
+Most signals are **Wire-Up**: a DB row or a single CLI count, read read-only — the raw-SQL
+`provado-ship.php` above. A few are **Instrument**: their state lives behind Magento's internal
+APIs, not a table. `cache_validity` needs `Cache\TypeListInterface::getInvalidated()`; consumer
+liveness needs the message-queue consumer config plus `LockManagerInterface::isLocked()` (the probe
+Magento's own `ConsumersRunner` uses). These cannot be a `SELECT`, so they ship from
+[`../shippers/php-agent/provado-ship-instrument.php`](../shippers/php-agent/provado-ship-instrument.php),
+which **boots the Magento application** (`Bootstrap::create(...)->getObjectManager()`) before
+reading. It is heavier than the raw-SQL path, so it runs on its own — usually less frequent — cron
+entry alongside the Wire-Up shipper. Both emit the identical `ProvadoSignal` shape. Run it with
+`--self-check` to confirm the bootstrap reaches the internal APIs (ships nothing).
+
 ---
 
 ## Method 3 — Event / Metric API

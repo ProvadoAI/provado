@@ -136,6 +136,9 @@ gets a source query/CLI and a `ProvadoSignal` shape. Ordered by leverage; build 
 | `order_integrity` | `quote` fingerprint, `sales_payment_transaction` aging | orphaned_quotes, uncaptured_aging |
 | `config_change` | `core_config_data.updated_at` deltas | changed_paths (+ NR deploy markers) |
 
-> Most are plain `SELECT`s the shipper runs locally. A few (`cache_validity`, consumer liveness)
-> need a CLI/internal call or a thin Magento module — those are the "Instrument" signals; the rest
-> are "Wire-Up".
+> Most are plain `SELECT`s the shipper runs locally (`provado-ship.php`) — the **"Wire-Up"**
+> signals. A few (`cache_validity` via `Cache\TypeListInterface::getInvalidated()`, consumer
+> liveness via the consumer config + `LockManagerInterface::isLocked()`) live behind Magento's
+> internal APIs, so they ship from `provado-ship-instrument.php`, which boots the application —
+> the **"Instrument"** signals. See `docs/shipping-methods.md` → "Instrument shipper" and
+> `shippers/README.md` → "Wire-Up vs Instrument".

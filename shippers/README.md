@@ -10,7 +10,28 @@ and emit the same event shape; Provado's reader does not care which produced it.
 |---|---|---|
 | [`newrelic-flex/provado.yml`](newrelic-flex/provado.yml) | New Relic Flex (`nri-flex`) | Infra agent present; config-only, no code. The usual first choice. |
 | [`php-agent/provado-ship.php`](php-agent/provado-ship.php) | Magento cron + New Relic PHP agent (`newrelic_record_custom_event`) | PHP agent present (Adobe Commerce Cloud); want it inside Magento's stack. |
+| [`php-agent/provado-ship-instrument.php`](php-agent/provado-ship-instrument.php) | Same method, but **bootstraps Magento** to reach internal APIs | Signals that aren't a DB row — `cache_validity` (`getInvalidated()`), consumer liveness. See Wire-Up vs Instrument below. |
 | [`event-api/provado-ship.sh`](event-api/provado-ship.sh) | New Relic Event API (HTTP POST) | No agent/Flex; any host/language. Needs an Insert key. |
+
+## Wire-Up vs Instrument
+
+Two classes of collection, by how the state is read:
+
+- **Wire-Up** — the state is already a DB row or a single CLI count, read read-only. The work is
+  collection + correlation, not instrumentation. `cron_health`, `indexer_status`, `queue_backlog`
+  and `config_change` are Wire-Up; `provado-ship.php` reads them with a raw `PDO` over
+  `app/etc/env.php` — no Magento bootstrap.
+- **Instrument** — the state lives behind Magento's **internal APIs**, not a table. `cache_validity`
+  reads `Cache\TypeListInterface::getInvalidated()`; consumer liveness reads the message-queue
+  consumer config plus `LockManagerInterface::isLocked()` (the same probe Magento's own
+  `ConsumersRunner` uses). These need the application booted, so they live in
+  `provado-ship-instrument.php`, which calls `Bootstrap::create(...)->getObjectManager()`.
+
+The Instrument shipper is heavier (it boots the full framework), so run it on its own — typically
+less frequent — cron entry, separate from the fast Wire-Up shipper. Both emit the identical
+`ProvadoSignal` shape; Provado's reader does not care which produced an event. Run
+`provado-ship-instrument.php --self-check` on a new host to confirm the bootstrap reaches the
+internal APIs before scheduling it (it ships nothing).
 
 ## Contract recap
 

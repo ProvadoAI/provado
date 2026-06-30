@@ -85,8 +85,13 @@ class NerdGraphClientTest extends TestCase
 
         $result = (new NerdGraphClient($http))->fetch($config, $this->timeWindow());
 
-        // Operational mode queries the ProvadoSignal custom events.
-        $this->assertStringContainsString('FROM ProvadoSignal', $http->lastRequest()->jsonBody['variables']['nrql']);
+        // Operational mode queries the ProvadoSignal custom events, with LIMIT MAX
+        // so the per-(signal,entity) series is not truncated to the most-recent
+        // ~100 events (which would cap dwell). LIMIT precedes the appended SINCE.
+        $nrql = $http->lastRequest()->jsonBody['variables']['nrql'];
+        $this->assertStringContainsString('FROM ProvadoSignal', $nrql);
+        $this->assertStringContainsString('LIMIT MAX', $nrql);
+        $this->assertStringContainsString('LIMIT MAX SINCE', $nrql);
         $this->assertSame([], $result->errors());
         $this->assertCount(1, $result->signals());
 

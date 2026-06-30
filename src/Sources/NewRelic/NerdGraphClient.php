@@ -64,7 +64,13 @@ final readonly class NerdGraphClient implements NewRelicClient
      */
     private const MODE_OPERATIONAL = 'operational_signals';
 
-    private const DEFAULT_PROVADO_SIGNAL_NRQL = 'SELECT * FROM ProvadoSignal';
+    /**
+     * `LIMIT MAX` is required: a bare `SELECT *` defaults to ~100 most-recent
+     * events, which truncates the per-(signal,entity) series to a couple of polls
+     * and caps dwell at a few minutes regardless of the read window. The window's
+     * SINCE/UNTIL is appended after, so LIMIT precedes SINCE per NRQL clause order.
+     */
+    private const DEFAULT_PROVADO_SIGNAL_NRQL = 'SELECT * FROM ProvadoSignal LIMIT MAX';
 
     /**
      * Event attribute names treated as entity dimensions when mapping

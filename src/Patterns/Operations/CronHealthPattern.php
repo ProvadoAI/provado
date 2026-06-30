@@ -198,7 +198,8 @@ final readonly class CronHealthPattern implements DiagnosticPattern
             'missed' => $missed,
             'error' => $error,
         ];
-        $evidence['cron_dwell_seconds'] = $this->dwellSeconds($group);
+        $evidence['cron_dwell_seconds'] = (new SignalSeries($group->signals))
+            ->dwellSeconds($cron, $this->isCronUnhealthy(...));
         $evidence['downstream_symptoms'] = $downstream;
 
         $config = $this->latestOfType($group, self::CONFIG_CHANGE);
@@ -211,27 +212,6 @@ final readonly class CronHealthPattern implements DiagnosticPattern
         }
 
         return $evidence;
-    }
-
-    /**
-     * How long the cron signal has been observed across the window (latest minus
-     * earliest cron_health timestamp) — a basic dwell proxy.
-     */
-    private function dwellSeconds(CorrelationGroup $group): int
-    {
-        $timestamps = [];
-
-        foreach ($group->signals as $signal) {
-            if ($signal->type->value === self::CRON_HEALTH) {
-                $timestamps[] = $signal->timestamp->getTimestamp();
-            }
-        }
-
-        if ($timestamps === []) {
-            return 0;
-        }
-
-        return max($timestamps) - min($timestamps);
     }
 
     private function latestOfType(CorrelationGroup $group, string $type): ?Signal

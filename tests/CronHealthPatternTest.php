@@ -104,6 +104,39 @@ class CronHealthPatternTest extends TestCase
         $this->assertContains('indexer catalog_product_price', $symptoms);
     }
 
+    public function test_cron_dwell_seconds_measures_the_current_bad_run_not_the_window_span(): void
+    {
+        // Healthy at 14:45, then degraded from 14:50 through 15:00. Dwell is the
+        // bad run (14:50→15:00 = 600s), not the full observation span (900s).
+        $group = new CorrelationGroup([
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 10], '14:45'),
+            $this->cronAt(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855], '14:50'),
+            $this->cronAt(['pending' => 380, 'running' => 0, 'missed' => 0, 'error' => 2860], '14:55'),
+            $this->cronAt(['pending' => 402, 'running' => 0, 'missed' => 0, 'error' => 2900], '15:00'),
+        ]);
+
+        $finding = (new CronHealthPattern())->evaluate($group)->findings()[0];
+
+        $this->assertSame(600, $finding->evidence['cron_dwell_seconds']);
+    }
+
+    /**
+     * @param array<string, int> $metrics
+     */
+    private function cronAt(array $metrics, string $hhmm): Signal
+    {
+        return new Signal(
+            id: new SignalId('magento:cron_health:'.$hhmm),
+            source: new SignalSource('magento'),
+            type: new SignalType('cron_health'),
+            timestamp: new DateTimeImmutable('2026-06-30T'.$hhmm.':00+00:00'),
+            severity: SignalSeverity::info(),
+            entityReferences: [new EntityReference('host', 'provado')],
+            attributes: $metrics,
+            rawPayloadReference: new RawPayloadReference('cron_health:'.$hhmm),
+        );
+    }
+
     private function indexerAt(string $view, int $backlog, string $hhmm): Signal
     {
         return new Signal(

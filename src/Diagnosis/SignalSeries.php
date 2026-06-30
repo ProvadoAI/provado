@@ -56,6 +56,58 @@ final readonly class SignalSeries
     }
 
     /**
+     * How long the entity series matching `$reference` has been continuously "bad"
+     * (per `$isBad`), measured from the onset of the current bad run to the latest
+     * snapshot. Returns 0 when the latest matching snapshot is not bad — i.e. the
+     * contradiction is not currently present.
+     *
+     * This is the dwell the architecture doc asks for ("alarm on how long a
+     * contradiction persists"), replacing a naive `max−min` span that counts every
+     * observation regardless of state. When the whole series is bad the result is a
+     * lower bound: we only know the state held from the first snapshot we saw.
+     *
+     * @param callable(Signal): bool $isBad
+     */
+    public function dwellSeconds(Signal $reference, callable $isBad): int
+    {
+        $key = $this->key($reference);
+
+        $matching = [];
+
+        foreach ($this->signals as $signal) {
+            if ($this->key($signal) === $key) {
+                $matching[] = $signal;
+            }
+        }
+
+        if ($matching === []) {
+            return 0;
+        }
+
+        usort($matching, static fn (Signal $a, Signal $b): int => $a->timestamp <=> $b->timestamp);
+
+        $latest = $matching[count($matching) - 1];
+
+        if (! $isBad($latest)) {
+            return 0;
+        }
+
+        // Walk back over the contiguous run of bad snapshots ending at the latest;
+        // the onset is the earliest snapshot in that unbroken run.
+        $onset = $latest;
+
+        for ($i = count($matching) - 2; $i >= 0; $i--) {
+            if (! $isBad($matching[$i])) {
+                break;
+            }
+
+            $onset = $matching[$i];
+        }
+
+        return $latest->timestamp->getTimestamp() - $onset->timestamp->getTimestamp();
+    }
+
+    /**
      * A stable key for a signal's `(type, entity-set)` so snapshots of the same
      * logical entity across polls share it. Entity references are sorted so order
      * does not affect the key.

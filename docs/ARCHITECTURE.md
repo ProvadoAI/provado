@@ -92,17 +92,27 @@ These interfaces are where Provado is meant to grow without disturbing the rest 
 | Seam | Role | Default(s) |
 |---|---|---|
 | `SourceAdapter` | Turn a source into canonical signals | `NewRelicAdapter`, `AdobeCommerceAdapter` (fixture-backed) |
-| `NewRelicClient` / `AdobeCommerceClient` | Credentialed per-source client the adapter selects when credentials are present | none yet (deferred real clients); fixture fallback otherwise |
+| `NewRelicClient` / `AdobeCommerceClient` | Credentialed per-source client the adapter selects when credentials are present | `NerdGraphClient` (live, NerdGraph/NRQL), `AdobeCommerceRestClient` (live, REST + OAuth 1.0a); fixture fallback otherwise |
 | `HttpClient` | Provider-agnostic HTTP transport for real clients | `LaravelHttpClient` (default), `FakeHttpClient` (tests) |
 | `SignalStore` / `SignalStoreFactory` | Persist & query signals per run | `InMemorySignalStore` (default), `DatabaseSignalStore` |
 | `DiagnosticPattern` | Diagnose a correlated group | `CheckoutDegradationPattern`, `OrderOperationsBacklogPattern`, `PaymentConfigRegressionPattern`, `CatalogFeedSyncFailurePattern` |
 | `PipelineObserver` | Observe stage boundaries (secret-safe) | `NullPipelineObserver`; `PsrLoggerObserver`; `ConsolePipelineObserver` |
 | `RetryPolicy` | Drive source-fetch retries | `NoRetryPolicy` (default), `FixedRetryPolicy` |
 
-Real provider clients land by implementing the per-source client interface (`NewRelicClient` /
-`AdobeCommerceClient`) on top of the `HttpClient` seam; the adapter selects it once credentials
-are configured, falling back to fixtures otherwise. Nothing downstream changes because everything
-reasons over the canonical `Signal` model.
+The live provider clients have landed on top of the `HttpClient` seam: `NerdGraphClient` runs an
+account-scoped NRQL query against New Relic NerdGraph (API-Key header) and maps the faceted result
+rows to `transaction_health` signals; `AdobeCommerceRestClient` reads `/V1/orders` from Magento and
+maps them to one `order_activity` signal per store (`order_count`, `gross_total`, per-status
+`count_<status>` attributes). The Magento integration is authenticated with **OAuth 1.0a signed
+requests** (`OAuth1Signer`) — a plain Bearer token is not honored for the integration's ACL. The
+adapter selects the live client once credentials are configured, falling back to fixtures
+otherwise. Nothing downstream changes because everything reasons over the canonical `Signal` model.
+
+A direction note (see `ARCHITECTURE_DIRECTION_SOURCE.md` rev v3 and the signal catalog under
+`docs/simulations/`): these live clients read the **symptom and commerce-state** layers (APM
+transaction telemetry + order state). The deeper *diagnostic* signals — cron/indexer/cache state,
+quote fingerprints, payment transactions, etc. — live in Magento operational state (DB/CLI/logs)
+and are the next ingestion direction, a separate collector that slots in behind the same seams.
 
 ## Contract tests
 
@@ -116,8 +126,10 @@ tests/Contracts/recordings/{provider}/{name}.json
 Each recording defines a `status`, optional `headers`, and either an inline `body` (string or JSON
 object) or a `body_fixture` pointer that reuses an existing `tests/Fixtures/{path}.json` sample
 payload. `tests/Contracts/RecordedResponseLoader` loads a recording into a canonical `HttpResponse`,
-which a test replays through `FakeHttpClient` and feeds to the client under test. When the deferred
-real clients land, their contract tests drop into this convention unchanged.
+which a test replays through `FakeHttpClient` and feeds to the client under test. The live clients
+use this convention: `LiveClientContractTest` replays redacted recordings of real lab responses
+(`new_relic/nrql_transaction_health`, `adobe_commerce/orders`) through `NerdGraphClient` /
+`AdobeCommerceRestClient` and asserts the canonical signals — no live capture, no credentials in CI.
 
 ## Data flow (one run)
 
@@ -152,8 +164,9 @@ both, along with per-stage timings, so a degraded run is visible without blowing
 
 ## What's deliberately not here yet
 
-The following remain deferred behind the seams above until a real environment or design partner
-pulls them forward: live New Relic (NerdGraph) and Adobe Commerce (REST) clients, Adobe Commerce
-Cloud tier detection, a broad pattern library, revenue/economic-impact logic, and Tier 1+ sources.
-The shared HTTP transport those clients need now exists (the `HttpClient` seam above); only the
-provider-specific clients themselves are deferred.
+The live New Relic (NerdGraph) and Adobe Commerce (REST + OAuth 1.0a) clients now exist and read
+real data. What remains deferred behind the seams above, until pulled forward: the **Magento
+operational-state collector** (cron/indexer/cache/queue/config state read from DB/CLI/logs — the
+diagnostic signals per the realigned direction, candidate for v0.5.0), edition detection (Open
+Source vs Cloud, which the collector needs), a broad pattern library, revenue/economic-impact
+logic, and Tier 1+ sources (CrUX/RUM, payment processors, analytics, AI-discovery/edge).

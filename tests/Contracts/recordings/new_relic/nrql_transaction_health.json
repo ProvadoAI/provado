@@ -1,0 +1,28 @@
+{
+  "status": 200,
+  "headers": { "Content-Type": "application/json" },
+  "body": {
+    "data": {
+      "actor": {
+        "account": {
+          "nrql": {
+            "results": [
+              {
+                "facet": ["Magento Lab - Provado", "OtherTransaction/Custom/Cron job consumers_runner"],
+                "duration_ms": 8.85,
+                "error_rate": 0,
+                "throughput": 8397
+              },
+              {
+                "facet": ["Magento Lab - Provado", "OtherTransaction/Custom/Cron job indexer_update_all_views"],
+                "duration_ms": 0.117,
+                "error_rate": 0,
+                "throughput": 8397
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -75,7 +75,13 @@ return [
         'adobe_commerce' => [
             'enabled' => env('PROVADO_ADOBE_COMMERCE_ENABLED', false),
             'options' => ['base_url' => env('PROVADO_ADOBE_COMMERCE_BASE_URL')],
-            'credentials' => ['access_token' => env('PROVADO_ADOBE_COMMERCE_ACCESS_TOKEN')],
+            // Magento integrations authenticate via OAuth 1.0a — all four are required.
+            'credentials' => [
+                'consumer_key' => env('PROVADO_ADOBE_COMMERCE_CONSUMER_KEY'),
+                'consumer_secret' => env('PROVADO_ADOBE_COMMERCE_CONSUMER_SECRET'),
+                'access_token' => env('PROVADO_ADOBE_COMMERCE_ACCESS_TOKEN'),
+                'access_token_secret' => env('PROVADO_ADOBE_COMMERCE_ACCESS_TOKEN_SECRET'),
+            ],
         ],
     ],
 ];
@@ -86,10 +92,12 @@ Notes:
 - Sources ship **disabled** by default; enabling a source requires its options and credentials.
 - Credentials are never rendered in serialized config output (redacted).
 - Adapters select their client by **credential presence**: when a source's credentials are
-  configured and a credentialed client is wired, the adapter uses it; otherwise it falls back to
-  the fixture client. The real provider clients are still deferred, so in Alpha the fixture path
-  is taken and no outbound calls are made. The `http` timeouts above apply to those clients once
-  they ship — see the roadmap for the live-client plan.
+  configured the adapter uses the live client; otherwise it falls back to the fixture client (no
+  outbound calls). The live clients exist:
+  - **New Relic** — a User API key (`PROVADO_NEW_RELIC_API_KEY`) + account id; queries NerdGraph/NRQL.
+  - **Magento / Adobe Commerce** — an integration's **OAuth 1.0a** credentials (all four:
+    consumer key/secret + access token/secret). A plain Bearer token is *not* honored for the
+    integration's ACL, so all four are required; `base_url` may be given with or without `/rest`.
 
 ## Usage
 
@@ -117,6 +125,25 @@ Options:
 The command streams stage progress, renders the incident report (or a no-incident message),
 and prints per-stage timings. Isolated source/stage failures are surfaced without aborting the
 run.
+
+### Inspecting raw signals
+
+`provado:signals` fetches each configured source and prints the canonical signals (metric values)
+it returns in a per-source table — no correlation or pattern evaluation. Useful for eyeballing
+what each source reports live.
+
+```bash
+php artisan provado:signals --window=30d        # lookback window (e.g. 60m, 24h, 7d, 30d)
+php artisan provado:signals --from=... --to=...  # explicit ISO 8601 window
+php artisan provado:signals --demo               # bundled fixtures, no credentials
+```
+
+In this package (no host app), run the artisan commands through Testbench, which loads the
+service provider via `testbench.yaml` and reads credentials from the local `.env`:
+
+```bash
+php vendor/bin/testbench provado:signals --window=30d
+```
 
 ## Storage
 

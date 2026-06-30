@@ -38,11 +38,21 @@ final readonly class CronHealthPattern implements DiagnosticPattern
 
     private const CONFIG_CHANGE = 'config_change';
 
-    /** A pending backlog above this is treated as cron not keeping up. */
+    /**
+     * Cold-start floor for the pending backlog: used only until the learned
+     * baseline has enough samples to judge "high" relative to this instance's
+     * normal (see MIN_BASELINE_SAMPLES).
+     */
     private const PENDING_BACKLOG = 100;
 
-    /** An elevated count of errored cron rows. */
+    /** Cold-start floor for errored cron rows (see PENDING_BACKLOG). */
     private const ERROR_ELEVATED = 500;
+
+    /**
+     * Snapshots required before the learned baseline is trusted over the static
+     * cold-start floor. Below this the series is too short to characterise normal.
+     */
+    private const MIN_BASELINE_SAMPLES = 4;
 
     /** A config change within this many seconds of the cron signal is "recent". */
     private const RECENT_CONFIG_CHANGE_SECONDS = 3600;
@@ -80,17 +90,23 @@ final readonly class CronHealthPattern implements DiagnosticPattern
             return PatternEvaluationResult::none();
         }
 
+        $series = new SignalSeries($group->signals);
+
         $missed = $this->metric($cron, 'missed');
         $pending = $this->metric($cron, 'pending');
         $error = $this->metric($cron, 'error');
         $running = $this->metric($cron, 'running');
 
-        // Healthy cron: nothing missed, backlog and errors within bounds.
-        if (! $this->isCronUnhealthy($cron)) {
+        $pendingElevated = $this->isMetricElevated($series, $cron, 'pending', self::PENDING_BACKLOG);
+        $errorElevated = $this->isMetricElevated($series, $cron, 'error', self::ERROR_ELEVATED);
+
+        // Healthy cron: nothing missed, and neither backlog nor errors are high
+        // relative to this instance's learned-normal (or the cold-start floor).
+        if ($missed === 0 && ! $pendingElevated && ! $errorElevated) {
             return PatternEvaluationResult::none();
         }
 
-        $downstream = $this->downstreamSymptoms($group);
+        $downstream = $this->downstreamSymptoms($series);
 
         return PatternEvaluationResult::fromFindings([
             new DiagnosticFinding(
@@ -98,9 +114,9 @@ final readonly class CronHealthPattern implements DiagnosticPattern
                 patternId: $this->id(),
                 title: 'Cron health degraded',
                 summary: $this->summary($missed, $pending, $error, $downstream),
-                severity: $this->severity($missed, $pending, $error),
+                severity: $this->severity($missed, $pendingElevated, $errorElevated),
                 correlationId: $group->id,
-                evidence: $this->evidence($group, $cron, $missed, $pending, $error, $running, $downstream),
+                evidence: $this->evidence($group, $series, $cron, $missed, $pending, $error, $running, $downstream),
                 recommendedNextChecks: self::RECOMMENDED_NEXT_CHECKS,
             ),
         ]);
@@ -125,29 +141,68 @@ final readonly class CronHealthPattern implements DiagnosticPattern
     }
 
     /**
-     * Cron is unhealthy when the scheduler is missing jobs, the pending backlog is
-     * past the keeping-up bound, or errored rows are elevated. Reused as the fire
-     * condition and as the "is this state bad?" predicate for dwell.
+     * Cron is unhealthy when the scheduler is missing jobs, or the pending backlog
+     * or errored rows are high relative to this instance's learned-normal (falling
+     * back to the static cold-start floor on a short series). Reused as the "is
+     * this state bad?" predicate for dwell, evaluated against the same series.
      */
-    private function isCronUnhealthy(Signal $cron): bool
+    private function isCronUnhealthy(Signal $cron, SignalSeries $series): bool
     {
         return $this->metric($cron, 'missed') > 0
-            || $this->metric($cron, 'pending') > self::PENDING_BACKLOG
-            || $this->metric($cron, 'error') > self::ERROR_ELEVATED;
+            || $this->isMetricElevated($series, $cron, 'pending', self::PENDING_BACKLOG)
+            || $this->isMetricElevated($series, $cron, 'error', self::ERROR_ELEVATED);
     }
 
-    private function severity(int $missed, int $pending, int $error): DiagnosticFindingSeverity
+    /**
+     * A metric reads high when it exceeds the learned-normal upper bound — once the
+     * series is long enough to characterise normal — otherwise when it exceeds the
+     * static cold-start floor. This is what lets a stably-high-but-constant metric
+     * read normal while a real spike or a drift above a low normal is caught.
+     */
+    private function isMetricElevated(SignalSeries $series, Signal $cron, string $metric, int $floor): bool
+    {
+        $value = $this->metric($cron, $metric);
+        $baseline = $series->baselineFor($cron, $metric);
+
+        if ($baseline->sampleCount() >= self::MIN_BASELINE_SAMPLES) {
+            return $baseline->isHigh($value);
+        }
+
+        return $value > $floor;
+    }
+
+    private function severity(int $missed, bool $pendingElevated, bool $errorElevated): DiagnosticFindingSeverity
     {
         if ($missed > 0) {
             // The scheduler is not firing — the worst cron failure.
             return DiagnosticFindingSeverity::critical();
         }
 
-        if ($pending > self::PENDING_BACKLOG || $error > self::ERROR_ELEVATED) {
+        if ($pendingElevated || $errorElevated) {
             return DiagnosticFindingSeverity::error();
         }
 
         return DiagnosticFindingSeverity::warning();
+    }
+
+    /**
+     * Surface why the verdict fired: how many snapshots the baseline saw, whether
+     * it was trusted (vs the cold-start floor), and the learned high-water mark for
+     * the pending/error metrics.
+     *
+     * @return array<string, mixed>
+     */
+    private function baselineEvidence(SignalSeries $series, Signal $cron): array
+    {
+        $pending = $series->baselineFor($cron, 'pending');
+        $error = $series->baselineFor($cron, 'error');
+
+        return [
+            'samples' => $pending->sampleCount(),
+            'learned' => $pending->sampleCount() >= self::MIN_BASELINE_SAMPLES,
+            'pending_high' => round($pending->high(), 1),
+            'error_high' => round($error->high(), 1),
+        ];
     }
 
     /**
@@ -156,14 +211,14 @@ final readonly class CronHealthPattern implements DiagnosticPattern
      *
      * @return list<string>
      */
-    private function downstreamSymptoms(CorrelationGroup $group): array
+    private function downstreamSymptoms(SignalSeries $series): array
     {
         $symptoms = [];
 
         // Reduce to current state per entity first: with continuous shipping the
         // group holds many snapshots per indexer/queue, and a stale bad snapshot
         // must not flag an entity whose latest reading is healthy.
-        foreach ((new SignalSeries($group->signals))->latestPerEntity() as $signal) {
+        foreach ($series->latestPerEntity() as $signal) {
             if ($signal->type->value === self::INDEXER_STATUS
                 && ($this->metric($signal, 'backlog') > 0 || $this->metric($signal, 'invalid') > 0)) {
                 $symptoms[] = 'indexer '.$this->entityId($signal, 'indexer');
@@ -184,6 +239,7 @@ final readonly class CronHealthPattern implements DiagnosticPattern
      */
     private function evidence(
         CorrelationGroup $group,
+        SignalSeries $series,
         Signal $cron,
         int $missed,
         int $pending,
@@ -198,8 +254,11 @@ final readonly class CronHealthPattern implements DiagnosticPattern
             'missed' => $missed,
             'error' => $error,
         ];
-        $evidence['cron_dwell_seconds'] = (new SignalSeries($group->signals))
-            ->dwellSeconds($cron, $this->isCronUnhealthy(...));
+        $evidence['cron_dwell_seconds'] = $series->dwellSeconds(
+            $cron,
+            fn (Signal $s): bool => $this->isCronUnhealthy($s, $series),
+        );
+        $evidence['cron_baseline'] = $this->baselineEvidence($series, $cron);
         $evidence['downstream_symptoms'] = $downstream;
 
         $config = $this->latestOfType($group, self::CONFIG_CHANGE);

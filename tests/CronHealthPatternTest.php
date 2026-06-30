@@ -106,18 +106,65 @@ class CronHealthPatternTest extends TestCase
 
     public function test_cron_dwell_seconds_measures_the_current_bad_run_not_the_window_span(): void
     {
-        // Healthy at 14:45, then degraded from 14:50 through 15:00. Dwell is the
-        // bad run (14:50→15:00 = 600s), not the full observation span (900s).
+        // A low-normal pending backlog (5) establishes the baseline, then a spike
+        // to 600 from 14:55. Dwell is the bad run (14:55→15:00 = 300s), not the
+        // full observation span (1200s). The baseline predicate marks only the
+        // spiked snapshots as bad.
         $group = new CorrelationGroup([
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 10], '14:40'),
             $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 10], '14:45'),
-            $this->cronAt(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855], '14:50'),
-            $this->cronAt(['pending' => 380, 'running' => 0, 'missed' => 0, 'error' => 2860], '14:55'),
-            $this->cronAt(['pending' => 402, 'running' => 0, 'missed' => 0, 'error' => 2900], '15:00'),
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 10], '14:50'),
+            $this->cronAt(['pending' => 600, 'running' => 0, 'missed' => 0, 'error' => 10], '14:55'),
+            $this->cronAt(['pending' => 600, 'running' => 0, 'missed' => 0, 'error' => 10], '15:00'),
         ]);
 
         $finding = (new CronHealthPattern())->evaluate($group)->findings()[0];
 
-        $this->assertSame(600, $finding->evidence['cron_dwell_seconds']);
+        $this->assertSame(300, $finding->evidence['cron_dwell_seconds']);
+    }
+
+    public function test_a_stably_high_metric_does_not_fire_once_the_baseline_is_learned(): void
+    {
+        // The lab case: a persistently high errored-row count that is this
+        // instance's normal, not an incident. Above the static floor (500) every
+        // poll would fire; the learned baseline recognises it as normal.
+        $group = new CorrelationGroup([
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 2790], '14:45'),
+            $this->cronAt(['pending' => 6, 'running' => 0, 'missed' => 0, 'error' => 2800], '14:50'),
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 2810], '14:55'),
+            $this->cronAt(['pending' => 4, 'running' => 0, 'missed' => 0, 'error' => 2795], '15:00'),
+        ]);
+
+        $this->assertFalse((new CronHealthPattern())->evaluate($group)->hasFindings());
+    }
+
+    public function test_a_drift_above_a_low_normal_fires_even_below_the_static_floor(): void
+    {
+        // Pending normally ~5; a drift to 80 stays under the static floor of 100
+        // but is ~16× normal — the learned baseline catches it.
+        $group = new CorrelationGroup([
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 10], '14:45'),
+            $this->cronAt(['pending' => 4, 'running' => 0, 'missed' => 0, 'error' => 10], '14:50'),
+            $this->cronAt(['pending' => 6, 'running' => 0, 'missed' => 0, 'error' => 10], '14:55'),
+            $this->cronAt(['pending' => 80, 'running' => 0, 'missed' => 0, 'error' => 10], '15:00'),
+        ]);
+
+        $result = (new CronHealthPattern())->evaluate($group);
+
+        $this->assertTrue($result->hasFindings());
+        $this->assertSame('error', $result->findings()[0]->severity->value);
+    }
+
+    public function test_a_short_series_falls_back_to_the_static_cold_start_floor(): void
+    {
+        // Two snapshots is below MIN_BASELINE_SAMPLES, so the static floor applies:
+        // error 2855 > 500 fires even though the (tiny) series looks self-consistent.
+        $group = new CorrelationGroup([
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 2850], '14:55'),
+            $this->cronAt(['pending' => 5, 'running' => 0, 'missed' => 0, 'error' => 2855], '15:00'),
+        ]);
+
+        $this->assertTrue((new CronHealthPattern())->evaluate($group)->hasFindings());
     }
 
     /**

@@ -14,6 +14,7 @@ use Mquevedob\Provado\Incidents\IncidentReportBuilder;
 use Mquevedob\Provado\Patterns\Catalog\CatalogFeedSyncFailurePattern;
 use Mquevedob\Provado\Patterns\Checkout\CheckoutDegradationPattern;
 use Mquevedob\Provado\Patterns\DiagnosticPatternRegistry;
+use Mquevedob\Provado\Patterns\Operations\CronHealthPattern;
 use Mquevedob\Provado\Patterns\Orders\OrderOperationsBacklogPattern;
 use Mquevedob\Provado\Patterns\Payments\PaymentConfigRegressionPattern;
 use Mquevedob\Provado\Pipeline\DiagnosticPipeline;
@@ -107,6 +108,7 @@ class ProvadoServiceProvider extends ServiceProvider
                 new OrderOperationsBacklogPattern(),
                 new PaymentConfigRegressionPattern(),
                 new CatalogFeedSyncFailurePattern(),
+                new CronHealthPattern(),
             ]);
         });
 

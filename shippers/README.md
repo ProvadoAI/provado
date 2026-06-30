@@ -32,6 +32,7 @@ you use. Ordered by leverage:
 | `cron_health` | `cron_schedule` status counts | pending, running, success, missed, error |
 | `indexer_status` | per view: `MAX(<view>_cl.version_id)` − `mview_state.version_id`, `indexer_state` | one event per `indexer`: backlog, working, invalid |
 | `queue_backlog` | RabbitMQ mgmt API `/api/queues` per queue (+ DB `queue_message_status` fallback) | one event per `queue`: ready, unacked, consumers |
+| `config_change` | `core_config_data` churn (the marker-less change surface) | changed_1h, changed_24h, latest_change_age_seconds |
 
 > `indexer_status` and `queue_backlog` emit one `ProvadoSignal` per entity (view / queue), so they
 > use the php-agent or Event API path, not a single Flex query. `queue_backlog` reads the RabbitMQ

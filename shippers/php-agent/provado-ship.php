@@ -130,3 +130,20 @@ if ($dbQueue !== []) {
         'error'       => (int) ($dbQueue[6] ?? 0),
     ]);
 }
+
+// --- signal: config_change -------------------------------------------------
+// core_config_data churn — the marker-less change surface New Relic never sees
+// (admin config edits emit no deploy marker). A summary of recent change volume
+// and recency; Provado stamps symptom onset against it. updated_at is the only
+// change timestamp on this table.
+$config = $pdo->query("SELECT
+        SUM(updated_at >= NOW() - INTERVAL 1 HOUR)  AS changed_1h,
+        SUM(updated_at >= NOW() - INTERVAL 24 HOUR) AS changed_24h,
+        TIMESTAMPDIFF(SECOND, MAX(updated_at), NOW()) AS latest_change_age_seconds
+    FROM {$prefix}core_config_data")->fetch(PDO::FETCH_ASSOC);
+
+ship('config_change', $source, [
+    'changed_1h'                => (int) ($config['changed_1h'] ?? 0),
+    'changed_24h'               => (int) ($config['changed_24h'] ?? 0),
+    'latest_change_age_seconds' => (int) ($config['latest_change_age_seconds'] ?? 0),
+]);

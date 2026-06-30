@@ -156,3 +156,14 @@ the precondition for dwell (v0.6.0). The shipper runs with the NR PHP extension 
 is the shipping path); only the PHPUnit test run disables it (`-d newrelic.enabled=0`). The cron
 points at the mirror checkout (`/var/www/html/provado`), whose shipper file is tracked and so
 survives the `git reset --hard` the test mirror gets.
+
+The heavier **Instrument** shipper (`provado-ship-instrument.php`, v0.7.0) runs on its own,
+less-frequent entry — every 15 minutes — since it boots the Magento application:
+
+```cron
+*/15 * * * * MAGENTO_ROOT=/var/www/html/magento /usr/bin/php /var/www/html/provado/shippers/php-agent/provado-ship-instrument.php >> /var/log/provado-ship-instrument.log 2>&1
+```
+
+so `cache_validity` and `consumer_liveness` also arrive continuously, feeding the cron→cache and
+cron→email edges. Same NR-extension-enabled shipping path; its own log keeps the heavier run's
+output separate.

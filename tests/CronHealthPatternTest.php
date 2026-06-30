@@ -75,8 +75,8 @@ class CronHealthPatternTest extends TestCase
 
     public function test_downstream_collapse_is_dwell_qualified_and_declares_dark_edges(): void
     {
-        // The same indexer is in backlog across two polls → dwell 300s. The graph
-        // also declares the still-dark cache/email edges.
+        // The same indexer is in backlog across two polls → dwell 300s. After v0.7.0
+        // lit the cache edge, index/queue/cache are lit and only email stays dark.
         $group = new CorrelationGroup([
             $this->cron(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855]),
             $this->indexerAt('catalogsearch_fulltext', 120, '14:55'),
@@ -87,8 +87,56 @@ class CronHealthPatternTest extends TestCase
 
         $this->assertContains('indexer catalogsearch_fulltext', $finding->evidence['downstream_symptoms']);
         $this->assertSame(300, $finding->evidence['downstream_dwell_seconds']['indexer catalogsearch_fulltext']);
-        $this->assertSame(['index', 'queue'], $finding->evidence['dependency_graph']['lit']);
-        $this->assertSame(['cache', 'email'], $finding->evidence['dependency_graph']['dark']);
+        $this->assertSame(['index', 'queue', 'cache'], $finding->evidence['dependency_graph']['lit']);
+        $this->assertSame(['email'], $finding->evidence['dependency_graph']['dark']);
+    }
+
+    public function test_an_invalidated_cache_collapses_under_the_cron_verdict(): void
+    {
+        // cache_validity ships one event per cache type with a 0/1 invalidated flag.
+        // An invalidated type collapses under the degraded cron (cron is the worker
+        // that would clean it); a valid type is not a symptom.
+        $group = new CorrelationGroup([
+            $this->cron(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855]),
+            $this->cache('full_page', 1),
+            $this->cache('config', 0), // valid → not a symptom
+        ]);
+
+        $finding = (new CronHealthPattern())->evaluate($group)->findings()[0];
+
+        $this->assertContains('cache full_page', $finding->evidence['downstream_symptoms']);
+        $this->assertNotContains('cache config', $finding->evidence['downstream_symptoms']);
+        $this->assertContains('cache', $finding->evidence['dependency_graph']['lit']);
+        $this->assertStringContainsString('cache full_page', $finding->summary);
+    }
+
+    public function test_cache_symptom_is_dwell_qualified(): void
+    {
+        // full_page invalidated across two polls → dwell 300s, like any other edge.
+        $group = new CorrelationGroup([
+            $this->cron(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855]),
+            $this->cacheAt('full_page', 1, '14:55'),
+            $this->cacheAt('full_page', 1, '15:00'),
+        ]);
+
+        $finding = (new CronHealthPattern())->evaluate($group)->findings()[0];
+
+        $this->assertSame(300, $finding->evidence['downstream_dwell_seconds']['cache full_page']);
+    }
+
+    public function test_a_cache_invalidated_only_in_a_stale_snapshot_is_not_a_symptom(): void
+    {
+        // full_page was invalidated earlier but is valid in its latest snapshot —
+        // the latest-per-entity reduction must not flag it.
+        $group = new CorrelationGroup([
+            $this->cron(['pending' => 378, 'running' => 0, 'missed' => 0, 'error' => 2855]),
+            $this->cacheAt('full_page', 1, '14:50'), // stale: was invalidated
+            $this->cacheAt('full_page', 0, '15:00'), // latest: valid now
+        ]);
+
+        $symptoms = (new CronHealthPattern())->evaluate($group)->findings()[0]->evidence['downstream_symptoms'];
+
+        $this->assertNotContains('cache full_page', $symptoms);
     }
 
     public function test_recent_config_change_is_stamped(): void
@@ -288,6 +336,31 @@ class CronHealthPatternTest extends TestCase
             new EntityReference('queue', $name),
             new EntityReference('host', 'provado'),
         ], ['ready' => $ready, 'unacked' => 0, 'consumers' => $consumers]);
+    }
+
+    private function cache(string $type, int $invalidated): Signal
+    {
+        return $this->signal('cache_validity', [
+            new EntityReference('cache', $type),
+            new EntityReference('host', 'provado'),
+        ], ['invalidated' => $invalidated]);
+    }
+
+    private function cacheAt(string $type, int $invalidated, string $hhmm): Signal
+    {
+        return new Signal(
+            id: new SignalId('magento:cache_validity:'.$type.':'.$hhmm),
+            source: new SignalSource('magento'),
+            type: new SignalType('cache_validity'),
+            timestamp: new DateTimeImmutable('2026-06-30T'.$hhmm.':00+00:00'),
+            severity: SignalSeverity::info(),
+            entityReferences: [
+                new EntityReference('cache', $type),
+                new EntityReference('host', 'provado'),
+            ],
+            attributes: ['invalidated' => $invalidated],
+            rawPayloadReference: new RawPayloadReference('cache_validity:'.$type.':'.$hhmm),
+        );
     }
 
     private function config(int $changed1h, int $ageSeconds): Signal

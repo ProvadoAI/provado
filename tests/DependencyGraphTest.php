@@ -16,7 +16,7 @@ class DependencyGraphTest extends TestCase
         $this->assertTrue($lit->active);
         $this->assertSame('indexer_status', $lit->signalType);
 
-        $dark = DependencyEdge::dark('cache', 'cache');
+        $dark = DependencyEdge::dark('email', 'consumer');
         $this->assertFalse($dark->active);
         $this->assertNull($dark->signalType);
     }
@@ -26,8 +26,8 @@ class DependencyGraphTest extends TestCase
         $graph = $this->cronGraph();
 
         $this->assertSame('cron', $graph->upstream);
-        $this->assertSame(['index', 'queue'], $graph->litEdges());
-        $this->assertSame(['cache', 'email'], $graph->darkEdges());
+        $this->assertSame(['index', 'queue', 'cache'], $graph->litEdges());
+        $this->assertSame(['email'], $graph->darkEdges());
     }
 
     public function test_edge_for_signal_type_resolves_only_lit_edges(): void
@@ -36,8 +36,9 @@ class DependencyGraphTest extends TestCase
 
         $this->assertSame('index', $graph->edgeForSignalType('indexer_status')?->node);
         $this->assertSame('queue', $graph->edgeForSignalType('queue_backlog')?->node);
-        // An unfed type and a non-downstream type resolve to nothing.
-        $this->assertNull($graph->edgeForSignalType('cache_validity'));
+        $this->assertSame('cache', $graph->edgeForSignalType('cache_validity')?->node);
+        // A dark edge's (future) signal and a non-downstream type resolve to nothing.
+        $this->assertNull($graph->edgeForSignalType('consumer_liveness'));
         $this->assertNull($graph->edgeForSignalType('config_change'));
     }
 
@@ -46,7 +47,7 @@ class DependencyGraphTest extends TestCase
         return new DependencyGraph('cron', [
             DependencyEdge::lit('index', 'indexer', 'indexer_status'),
             DependencyEdge::lit('queue', 'queue', 'queue_backlog'),
-            DependencyEdge::dark('cache', 'cache'),
+            DependencyEdge::lit('cache', 'cache', 'cache_validity'),
             DependencyEdge::dark('email', 'consumer'),
         ]);
     }

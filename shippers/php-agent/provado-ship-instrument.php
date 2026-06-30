@@ -107,6 +107,31 @@ if ($selfCheck) {
 }
 
 // --- Instrument signals -------------------------------------------------------
-// No signal is shipped yet: Phase 1 (v0.7.0) only establishes the bootstrap
-// capability. Phase 2 adds cache_validity (getInvalidated()) and Phase 3 adds
-// consumer liveness here, each calling ship() with raw state.
+
+// --- signal: cache_validity ---------------------------------------------------
+// Which cache types are currently invalidated. Cron is the worker that cleans an
+// invalidated cache, so a cache left invalidated while cron is degraded is the
+// cron→cache staleness symptom. Emitted one event per *enabled* cache type with a
+// 0/1 invalidated flag — not just the invalidated ones — so each type has a fresh
+// per-poll reading for Provado's latest-per-entity reduction and dwell (otherwise a
+// type that gets cleaned would keep its last "invalidated" snapshot forever). Raw
+// state only: how long it has been invalidated (dwell) is Provado's job.
+$typeList = $objectManager->get(\Magento\Framework\App\Cache\TypeListInterface::class);
+
+$invalidatedIds = [];
+foreach ($typeList->getInvalidated() as $id => $type) {
+    $invalidatedIds[(string) (is_object($type) && method_exists($type, 'getId') ? $type->getId() : $id)] = true;
+}
+
+foreach ($typeList->getTypes() as $id => $type) {
+    $cacheType = (string) (is_object($type) && method_exists($type, 'getId') ? $type->getId() : $id);
+
+    ship('cache_validity', $source, [
+        'cache' => $cacheType,
+        'invalidated' => isset($invalidatedIds[$cacheType]) ? 1 : 0,
+    ]);
+}
+
+// --- signal: consumer liveness (Phase 3) --------------------------------------
+// Added in Phase 3: enumerate the message-queue consumers and probe liveness via
+// LockManagerInterface::isLocked(), shipping raw state for the cron→email edge.

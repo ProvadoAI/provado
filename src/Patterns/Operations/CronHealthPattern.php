@@ -38,6 +38,8 @@ final readonly class CronHealthPattern implements DiagnosticPattern
 
     private const QUEUE_BACKLOG = 'queue_backlog';
 
+    private const CACHE_VALIDITY = 'cache_validity';
+
     private const CONFIG_CHANGE = 'config_change';
 
     /**
@@ -281,17 +283,17 @@ final readonly class CronHealthPattern implements DiagnosticPattern
 
     /**
      * The Magento dependency graph rooted at cron: cron is upstream of cache,
-     * index, email and queue (the architecture doc's lead pattern). Index and queue
-     * are lit — their `ProvadoSignal`s ship today. Cache and email are declared but
-     * dark: they await an "Instrument" signal (cache invalidation / consumer
-     * liveness) and light up by supplying it, with no graph redesign.
+     * index, email and queue (the architecture doc's lead pattern). Index, queue and
+     * cache are lit — their `ProvadoSignal`s ship today (cache via the "Instrument"
+     * shipper's `cache_validity`, v0.7.0). Email is declared but dark: it awaits the
+     * consumer-liveness signal and lights up by supplying it, with no graph redesign.
      */
     private function cronDependencyGraph(): DependencyGraph
     {
         return new DependencyGraph('cron', [
             DependencyEdge::lit('index', 'indexer', self::INDEXER_STATUS),
             DependencyEdge::lit('queue', 'queue', self::QUEUE_BACKLOG),
-            DependencyEdge::dark('cache', 'cache'),
+            DependencyEdge::lit('cache', 'cache', self::CACHE_VALIDITY),
             DependencyEdge::dark('email', 'consumer'),
         ]);
     }
@@ -299,13 +301,16 @@ final readonly class CronHealthPattern implements DiagnosticPattern
     /**
      * Whether a downstream signal is currently symptomatic for its edge. Edge
      * semantics: an indexer in backlog or invalid; a queue with work ready but no
-     * consumer draining it (disconnected). A newly-lit edge adds its arm here.
+     * consumer draining it (disconnected); a cache type left invalidated (cron is the
+     * worker that cleans it, so an invalidated cache under a degraded cron is the
+     * cron→cache symptom). A newly-lit edge adds its arm here.
      */
     private function isSymptomatic(DependencyEdge $edge, Signal $signal): bool
     {
         return match ($edge->node) {
             'index' => $this->metric($signal, 'backlog') > 0 || $this->metric($signal, 'invalid') > 0,
             'queue' => $this->metric($signal, 'ready') > 0 && $this->metric($signal, 'consumers') === 0,
+            'cache' => $this->metric($signal, 'invalidated') > 0,
             default => false,
         };
     }

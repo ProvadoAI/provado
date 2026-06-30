@@ -151,6 +151,30 @@ class NewRelicPayloadMapperTest extends TestCase
         $this->assertSame('2023-11-14', $signal->timestamp->format('Y-m-d'));
     }
 
+    public function test_cache_validity_event_maps_the_cache_type_to_an_entity(): void
+    {
+        // The Instrument shipper emits one cache_validity event per cache type with a
+        // 0/1 invalidated flag; the reader must treat `cache` as an entity dimension
+        // so each type is its own series (not collapsed under the source fallback).
+        $signal = (new NewRelicPayloadMapper())->mapProvadoSignalEvent(
+            [
+                'signal' => 'cache_validity',
+                'source' => 'magento',
+                'cache' => 'full_page',
+                'invalidated' => 1,
+                'timestamp' => 1_700_000_000_000,
+            ],
+            ['store', 'indexer', 'queue', 'cache', 'cron_job', 'host'],
+            0,
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+        );
+
+        $this->assertTrue($signal->hasEntity(new EntityReference('cache', 'full_page')));
+        $this->assertSame(['invalidated' => 1], $signal->attributes);
+        // The cache type name is an entity, not a metric.
+        $this->assertArrayNotHasKey('cache', $signal->attributes);
+    }
+
     public function test_provado_signal_event_excludes_new_relic_internal_attributes(): void
     {
         $signal = (new NewRelicPayloadMapper())->mapProvadoSignalEvent(

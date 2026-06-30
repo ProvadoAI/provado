@@ -4,4 +4,6 @@ composer.lock
 .phpunit.result.cache
 composer.phar
 .env
+.env.*
+!.env.example
 .DS_Store

@@ -43,6 +43,35 @@ class LiveClientContractTest extends TestCase
         $this->assertSame(8.85, $signal->attributes['duration_ms']);
     }
 
+    public function test_provado_signal_operational_recording_maps_to_signals(): void
+    {
+        $http = (new FakeHttpClient())->respondWith(
+            (new RecordedResponseLoader())->load('new_relic', 'provado_signal_operational'),
+        );
+
+        $config = new SourceConfig(
+            name: 'new_relic',
+            enabled: true,
+            options: ['account_id' => '8129476', 'mode' => 'operational_signals'],
+            credentials: new SourceCredentials(['api_key' => 'nr-key']),
+        );
+
+        $result = (new NerdGraphClient($http))->fetch($config, $this->window());
+
+        $this->assertSame([], $result->errors());
+        $this->assertCount(2, $result->signals());
+
+        [$cron, $indexer] = $result->signals();
+        $this->assertSame('cron_health', $cron->type->value);
+        $this->assertSame('magento', $cron->source->value);
+        $this->assertTrue($cron->hasEntity(new EntityReference('store', 'default')));
+        $this->assertSame(3, $cron->attributes['missed']);
+
+        $this->assertSame('indexer_status', $indexer->type->value);
+        $this->assertTrue($indexer->hasEntity(new EntityReference('indexer', 'catalogsearch_fulltext')));
+        $this->assertSame(420, $indexer->attributes['backlog']);
+    }
+
     public function test_adobe_commerce_orders_recording_maps_to_order_activity(): void
     {
         $http = (new FakeHttpClient())->respondWith(

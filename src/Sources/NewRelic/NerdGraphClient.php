@@ -58,6 +58,22 @@ final readonly class NerdGraphClient implements NewRelicClient
      */
     private const DEFAULT_FACET_ENTITIES = ['service', 'transaction'];
 
+    /**
+     * Operational-signal mode reads the `ProvadoSignal` custom events shipped into
+     * New Relic (see docs/signal-shipping.md) instead of faceted APM transactions.
+     */
+    private const MODE_OPERATIONAL = 'operational_signals';
+
+    private const DEFAULT_PROVADO_SIGNAL_NRQL = 'SELECT * FROM ProvadoSignal';
+
+    /**
+     * Event attribute names treated as entity dimensions when mapping
+     * `ProvadoSignal` events; any present one becomes an entity of that type.
+     *
+     * @var list<string>
+     */
+    private const DEFAULT_SIGNAL_ENTITY_FIELDS = ['store', 'indexer', 'queue', 'cron_job', 'host', 'service', 'transaction'];
+
     private const GRAPHQL_QUERY = 'query ProvadoNrql($accountId: Int!, $nrql: Nrql!) '
         .'{ actor { account(id: $accountId) { nrql(query: $nrql) { results } } } }';
 
@@ -159,8 +175,10 @@ final readonly class NerdGraphClient implements NewRelicClient
             );
         }
 
-        $type = new SignalType($this->signalType($config));
-        $facetEntities = $this->facetEntities($config);
+        $operational = $this->isOperationalMode($config);
+        $type = $operational ? null : new SignalType($this->signalType($config));
+        $facetEntities = $operational ? [] : $this->facetEntities($config);
+        $signalEntityFields = $operational ? $this->signalEntityFields($config) : [];
 
         $signals = [];
         $errors = [];
@@ -173,7 +191,9 @@ final readonly class NerdGraphClient implements NewRelicClient
             }
 
             try {
-                $signals[] = $this->mapper->mapNrqlRow($row, $type, $window->end, $facetEntities, 'nrql:'.$index);
+                $signals[] = $operational
+                    ? $this->mapper->mapProvadoSignalEvent($row, $signalEntityFields, (int) $index, $window->end)
+                    : $this->mapper->mapNrqlRow($row, $type, $window->end, $facetEntities, 'nrql:'.$index);
             } catch (Throwable $exception) {
                 $errors[] = $this->rowError($index, $exception->getMessage());
             }
@@ -208,12 +228,18 @@ final readonly class NerdGraphClient implements NewRelicClient
         return is_string($endpoint) && trim($endpoint) !== '' ? trim($endpoint) : self::DEFAULT_ENDPOINT;
     }
 
+    private function isOperationalMode(SourceConfig $config): bool
+    {
+        return $config->option('mode') === self::MODE_OPERATIONAL;
+    }
+
     private function nrql(SourceConfig $config, TimeWindow $window): string
     {
-        $nrql = $config->option('nrql', self::DEFAULT_NRQL);
+        $default = $this->isOperationalMode($config) ? self::DEFAULT_PROVADO_SIGNAL_NRQL : self::DEFAULT_NRQL;
+        $nrql = $config->option('nrql', $default);
 
         if (! is_string($nrql) || trim($nrql) === '') {
-            $nrql = self::DEFAULT_NRQL;
+            $nrql = $default;
         }
 
         return sprintf(
@@ -255,6 +281,31 @@ final readonly class NerdGraphClient implements NewRelicClient
         }
 
         return $facetEntities === [] ? self::DEFAULT_FACET_ENTITIES : $facetEntities;
+    }
+
+    /**
+     * Event attribute names to treat as entity dimensions when mapping
+     * `ProvadoSignal` events. Override via the `signal_entity_fields` option.
+     *
+     * @return list<string>
+     */
+    private function signalEntityFields(SourceConfig $config): array
+    {
+        $configured = $config->option('signal_entity_fields', self::DEFAULT_SIGNAL_ENTITY_FIELDS);
+
+        if (! is_array($configured)) {
+            return self::DEFAULT_SIGNAL_ENTITY_FIELDS;
+        }
+
+        $fields = [];
+
+        foreach ($configured as $field) {
+            if (is_string($field) && trim($field) !== '') {
+                $fields[] = trim($field);
+            }
+        }
+
+        return $fields === [] ? self::DEFAULT_SIGNAL_ENTITY_FIELDS : $fields;
     }
 
     /**

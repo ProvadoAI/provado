@@ -147,6 +147,98 @@ final readonly class NewRelicPayloadMapper
     }
 
     /**
+     * Map a `ProvadoSignal` custom event (read from New Relic via NerdGraph) into a
+     * canonical Signal. See `docs/signal-shipping.md`: the event is flat — `signal`
+     * → type, `source` → source, named entity attributes → entity references,
+     * numeric fields → attributes, `timestamp` (epoch ms) → signal timestamp. This
+     * is shipper-agnostic: the same shape arrives whether it was shipped by New
+     * Relic Flex, a Magento cron + PHP agent, or the Event API.
+     *
+     * @param array<string, mixed> $event
+     * @param list<string> $entityFields attribute names to treat as entity dimensions
+     */
+    public function mapProvadoSignalEvent(
+        array $event,
+        array $entityFields,
+        int $index,
+        DateTimeImmutable $defaultTimestamp,
+    ): Signal {
+        $signal = $event['signal'] ?? null;
+
+        if (! is_string($signal) || trim($signal) === '') {
+            throw new InvalidArgumentException('ProvadoSignal event must include a non-empty "signal".');
+        }
+
+        $signal = trim($signal);
+        $source = $event['source'] ?? null;
+        $sourceValue = is_string($source) && trim($source) !== '' ? trim($source) : 'magento';
+
+        $entityReferences = $this->provadoSignalEntities($event, $entityFields, $sourceValue);
+        $attributes = $this->numericAttributes($event, array_merge(['signal', 'source', 'timestamp'], $entityFields));
+
+        if ($attributes === []) {
+            throw new InvalidArgumentException('ProvadoSignal event must include at least one numeric metric.');
+        }
+
+        $id = $sourceValue.':'.$signal.':'.$index;
+
+        return new Signal(
+            id: new SignalId($id),
+            source: new SignalSource($sourceValue),
+            type: new SignalType($signal),
+            timestamp: $this->eventTimestamp($event, $defaultTimestamp),
+            severity: SignalSeverity::info(),
+            entityReferences: $entityReferences,
+            attributes: $attributes,
+            rawPayloadReference: new RawPayloadReference($id),
+        );
+    }
+
+    /**
+     * Entity dimensions are named attributes (e.g. store, indexer, queue, cron_job);
+     * each present one becomes an EntityReference of that type. Falls back to the
+     * source so every signal has the ≥1 entity the canonical model requires.
+     *
+     * @param array<string, mixed> $event
+     * @param list<string> $entityFields
+     * @return list<EntityReference>
+     */
+    private function provadoSignalEntities(array $event, array $entityFields, string $sourceValue): array
+    {
+        $references = [];
+
+        foreach ($entityFields as $field) {
+            $value = $event[$field] ?? null;
+
+            if ((is_string($value) || is_int($value) || is_float($value)) && trim((string) $value) !== '') {
+                $references[] = new EntityReference($field, trim((string) $value));
+            }
+        }
+
+        if ($references === []) {
+            $references[] = new EntityReference('source', $sourceValue);
+        }
+
+        return $references;
+    }
+
+    /**
+     * New Relic stamps custom events with an epoch-millisecond `timestamp`.
+     *
+     * @param array<string, mixed> $event
+     */
+    private function eventTimestamp(array $event, DateTimeImmutable $default): DateTimeImmutable
+    {
+        $timestamp = $event['timestamp'] ?? null;
+
+        if (is_int($timestamp) || is_float($timestamp)) {
+            return new DateTimeImmutable('@'.intdiv((int) $timestamp, 1000));
+        }
+
+        return $default;
+    }
+
+    /**
      * Honor an explicit, valid `severity` column; otherwise default to info.
      *
      * @param array<string, mixed> $row

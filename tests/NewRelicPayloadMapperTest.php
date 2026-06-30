@@ -123,6 +123,72 @@ class NewRelicPayloadMapperTest extends TestCase
         );
     }
 
+    public function test_provado_signal_event_maps_to_canonical_signal(): void
+    {
+        $signal = (new NewRelicPayloadMapper())->mapProvadoSignalEvent(
+            [
+                'signal' => 'cron_health',
+                'source' => 'magento',
+                'store' => 'default',
+                'missed' => 3,
+                'pending' => 12,
+                'error' => 0,
+                'timestamp' => 1_700_000_000_000,
+            ],
+            ['store', 'indexer', 'queue', 'cron_job'],
+            0,
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+        );
+
+        $this->assertSame('magento:cron_health:0', $signal->id->value);
+        $this->assertSame('magento', $signal->source->value);
+        $this->assertSame('cron_health', $signal->type->value);
+        $this->assertSame('info', $signal->severity->value);
+        $this->assertTrue($signal->hasEntity(new EntityReference('store', 'default')));
+        $this->assertSame(['missed' => 3, 'pending' => 12, 'error' => 0], $signal->attributes);
+        // signal/source/timestamp/entity attributes are not metrics.
+        $this->assertArrayNotHasKey('timestamp', $signal->attributes);
+        $this->assertSame('2023-11-14', $signal->timestamp->format('Y-m-d'));
+    }
+
+    public function test_provado_signal_event_falls_back_to_source_entity(): void
+    {
+        $signal = (new NewRelicPayloadMapper())->mapProvadoSignalEvent(
+            ['signal' => 'queue_backlog', 'source' => 'magento', 'ready' => 40],
+            ['store', 'queue'],
+            1,
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+        );
+
+        // No entity attribute present → falls back to the source so the ≥1 entity holds.
+        $this->assertTrue($signal->hasEntity(new EntityReference('source', 'magento')));
+        $this->assertSame(40, $signal->attributes['ready']);
+    }
+
+    public function test_provado_signal_event_without_signal_throws(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        (new NewRelicPayloadMapper())->mapProvadoSignalEvent(
+            ['source' => 'magento', 'missed' => 1],
+            ['store'],
+            0,
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+        );
+    }
+
+    public function test_provado_signal_event_without_metrics_throws(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        (new NewRelicPayloadMapper())->mapProvadoSignalEvent(
+            ['signal' => 'cron_health', 'source' => 'magento', 'store' => 'default'],
+            ['store'],
+            0,
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+        );
+    }
+
     /**
      * @param array<string, mixed> $overrides
      * @return array<string, mixed>

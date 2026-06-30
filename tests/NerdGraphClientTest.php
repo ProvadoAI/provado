@@ -61,6 +61,43 @@ class NerdGraphClientTest extends TestCase
         $this->assertArrayNotHasKey('facet', $signal->attributes);
     }
 
+    public function test_operational_mode_reads_provado_signal_events(): void
+    {
+        $body = json_encode([
+            'data' => ['actor' => ['account' => ['nrql' => ['results' => [
+                [
+                    'signal' => 'cron_health',
+                    'source' => 'magento',
+                    'store' => 'default',
+                    'missed' => 3,
+                    'pending' => 12,
+                    'timestamp' => 1_700_000_000_000,
+                ],
+            ]]]]],
+        ]);
+        $http = (new FakeHttpClient())->respondWith(new HttpResponse(200, (string) $body));
+        $config = new SourceConfig(
+            name: 'new_relic',
+            enabled: true,
+            options: ['account_id' => '123456', 'mode' => 'operational_signals'],
+            credentials: new SourceCredentials(['api_key' => 'nr-secret']),
+        );
+
+        $result = (new NerdGraphClient($http))->fetch($config, $this->timeWindow());
+
+        // Operational mode queries the ProvadoSignal custom events.
+        $this->assertStringContainsString('FROM ProvadoSignal', $http->lastRequest()->jsonBody['variables']['nrql']);
+        $this->assertSame([], $result->errors());
+        $this->assertCount(1, $result->signals());
+
+        $signal = $result->signals()[0];
+        $this->assertSame('cron_health', $signal->type->value);
+        $this->assertSame('magento', $signal->source->value);
+        $this->assertTrue($signal->hasEntity(new EntityReference('store', 'default')));
+        $this->assertSame(3, $signal->attributes['missed']);
+        $this->assertSame(12, $signal->attributes['pending']);
+    }
+
     public function test_row_without_facet_is_reported_as_invalid_row(): void
     {
         $body = json_encode([

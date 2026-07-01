@@ -203,6 +203,32 @@ class NewRelicPayloadMapperTest extends TestCase
         $this->assertArrayNotHasKey('consumer', $signal->attributes);
     }
 
+    public function test_source_instance_maps_to_an_entity_so_signals_from_one_instance_correlate(): void
+    {
+        // Every shipper stamps `source_instance` on every event (v0.8.0 Phase 2) so
+        // all signals from one Magento instance share an entity by design — the
+        // shipper-independent basis for the cron lead-pattern collapse (no reliance
+        // on the New Relic agent's auto-`host`). The reader must map it to an entity,
+        // not leak it into the numeric metrics.
+        $signal = (new NewRelicPayloadMapper())->mapProvadoSignalEvent(
+            [
+                'signal' => 'cron_health',
+                'source' => 'magento',
+                'source_instance' => 'shop-1',
+                'missed' => 60,
+                'pending' => 523,
+                'timestamp' => 1_700_000_000_000,
+            ],
+            ['store', 'indexer', 'queue', 'cache', 'consumer', 'cron_job', 'source_instance', 'host'],
+            0,
+            new DateTimeImmutable('2026-06-08T12:30:00+00:00'),
+        );
+
+        $this->assertTrue($signal->hasEntity(new EntityReference('source_instance', 'shop-1')));
+        $this->assertSame(['missed' => 60, 'pending' => 523], $signal->attributes);
+        $this->assertArrayNotHasKey('source_instance', $signal->attributes);
+    }
+
     public function test_provado_signal_event_excludes_new_relic_internal_attributes(): void
     {
         $signal = (new NewRelicPayloadMapper())->mapProvadoSignalEvent(

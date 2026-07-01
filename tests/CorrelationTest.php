@@ -34,6 +34,32 @@ class CorrelationTest extends TestCase
         $this->assertSame(['signal-1', 'signal-2'], $this->signalIds($groups[0]->signals));
     }
 
+    public function test_shared_source_instance_groups_signals_with_otherwise_disjoint_entities(): void
+    {
+        // v0.8.0 Phase 2: every shipper stamps `source_instance`, so signals from one
+        // Magento instance correlate by design even when their own entities differ and
+        // there is no auto-`host` (the Event API shipper C scenario). A degraded cron
+        // and its downstream index/cache symptoms share only `source_instance:shop-1`
+        // yet must land in one group — the shipper-independent basis for the collapse.
+        $instance = new EntityReference('source_instance', 'shop-1');
+        $cron = $this->signal('cron_health', type: new SignalType('cron_health'), entityReferences: [$instance]);
+        $indexer = $this->signal('indexer_status', type: new SignalType('indexer_status'), entityReferences: [
+            $instance,
+            new EntityReference('indexer', 'catalog_product_price'),
+        ]);
+        $cache = $this->signal('cache_validity', type: new SignalType('cache_validity'), entityReferences: [
+            $instance,
+            new EntityReference('cache', 'config'),
+        ]);
+        $engine = new CorrelationEngine($this->storeWithSignals([$cron, $indexer, $cache]));
+
+        $groups = $engine->correlate($this->window());
+
+        $this->assertCount(1, $groups);
+        $this->assertSame(['cron_health', 'indexer_status', 'cache_validity'], $this->signalIds($groups[0]->signals));
+        $this->assertSame(['source_instance:shop-1'], $this->entityKeys($groups[0]->sharedEntities()));
+    }
+
     public function test_not_grouping_unrelated_signals(): void
     {
         $first = $this->signal('signal-1', entityReferences: [new EntityReference('service', 'checkout')]);

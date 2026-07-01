@@ -70,6 +70,13 @@ class LiveClientContractTest extends TestCase
         $this->assertSame('indexer_status', $indexer->type->value);
         $this->assertTrue($indexer->hasEntity(new EntityReference('indexer', 'catalogsearch_fulltext')));
         $this->assertSame(420, $indexer->attributes['backlog']);
+
+        // v0.8.0 Phase 2: every shipper stamps `source_instance`, so the reader gives
+        // both signals the same instance entity — the shipper-independent basis for
+        // the cron lead-pattern collapse (both land in one correlation group).
+        $instance = new EntityReference('source_instance', 'shop-1');
+        $this->assertTrue($cron->hasEntity($instance));
+        $this->assertTrue($indexer->hasEntity($instance));
     }
 
     public function test_adobe_commerce_orders_recording_maps_to_order_activity(): void

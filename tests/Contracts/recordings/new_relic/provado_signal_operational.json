@@ -10,6 +10,7 @@
               {
                 "signal": "cron_health",
                 "source": "magento",
+                "source_instance": "shop-1",
                 "store": "default",
                 "missed": 3,
                 "running": 1,
@@ -20,6 +21,7 @@
               {
                 "signal": "indexer_status",
                 "source": "magento",
+                "source_instance": "shop-1",
                 "indexer": "catalogsearch_fulltext",
                 "backlog": 420,
                 "stuck": 1,

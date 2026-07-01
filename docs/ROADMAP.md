@@ -40,10 +40,11 @@ integrity**.
 | 5d — order/payment integrity (#6/#7) | v0.11.0 Phase 1 |
 | 5e — New Relic deploy markers (change spine) | v0.11.0 Phase 2 |
 
-**Still pending (not yet a roadmap):** the detailed **coverage map** (`docs/COVERAGE.md`) — two
-views (per signal, per failure mode), each with `✅ what exists` / `❌ what's missing` columns and a
-renderable mermaid overview, updated alongside roadmap items. The `#4/#5/#8` coverage re-audit
-(v0.8.0 Phase 1 item 2) feeds it.
+**Coverage map:** the honest, living view of where diagnosis stands (per signal + per failure
+mode, each with `✅ what exists` / `❌ what's missing`, plus a renderable mermaid overview and the
+6 cross-cutting structural gaps) lives in [`docs/COVERAGE.md`](COVERAGE.md). Measured against
+v0.7.0; update it alongside each roadmap-item checkbox. Green means *diagnosed on live data* — not
+"the signal ships" or "the fixture passes".
 
 ## Working agreement
 

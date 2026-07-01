@@ -5,7 +5,7 @@ planned, not what a fixture demonstrates, but what Provado concludes on **live**
 Two views: **by signal** (what raw material exists) and **by failure mode** (what can actually
 be concluded). The gap between them is where the value is.
 
-> **Measured against:** release **v0.7.0** (lead-pattern completion).
+> **Measured against:** release **v0.8.0** (shared instance entity + signal-fidelity hygiene).
 > **Last updated:** 2026-07-01.
 > **Rule:** update this alongside the roadmap-item checkbox in the same commit. Do **not** mark a
 > row green because a signal ships or a fixture passes — green means *diagnosed on live data*.

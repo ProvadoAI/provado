@@ -12,7 +12,7 @@ Primary source document for direction: `docs/ARCHITECTURE_DIRECTION_SOURCE.md`.
 | v0.11.0 | Planned | [`docs/roadmaps/v0.11.0.md`](roadmaps/v0.11.0.md) |
 | v0.10.0 | Planned | [`docs/roadmaps/v0.10.0.md`](roadmaps/v0.10.0.md) |
 | v0.9.0 | Planned | [`docs/roadmaps/v0.9.0.md`](roadmaps/v0.9.0.md) |
-| v0.8.0 | In progress | [`docs/roadmaps/v0.8.0.md`](roadmaps/v0.8.0.md) |
+| v0.8.0 | Shipped (tag `0.8.0`) | [`docs/roadmaps/v0.8.0.md`](roadmaps/v0.8.0.md) |
 | v0.7.0 | Shipped (tag `0.7.0`) | [`docs/roadmaps/v0.7.0.md`](roadmaps/v0.7.0.md) |
 | v0.6.0 | Shipped (tag `0.6.0`) | [`docs/roadmaps/v0.6.0.md`](roadmaps/v0.6.0.md) |
 | v0.5.0 | Shipped (tag `0.5.0`) | [`docs/roadmaps/v0.5.0.md`](roadmaps/v0.5.0.md) |
@@ -43,7 +43,7 @@ integrity**.
 **Coverage map:** the honest, living view of where diagnosis stands (per signal + per failure
 mode, each with `✅ what exists` / `❌ what's missing`, plus a renderable mermaid overview and the
 6 cross-cutting structural gaps) lives in [`docs/COVERAGE.md`](COVERAGE.md). Measured against
-v0.7.0; update it alongside each roadmap-item checkbox. Green means *diagnosed on live data* — not
+v0.8.0; update it alongside each roadmap-item checkbox. Green means *diagnosed on live data* — not
 "the signal ships" or "the fixture passes".
 
 ## Working agreement

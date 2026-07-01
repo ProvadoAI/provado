@@ -151,14 +151,14 @@ gets a source query/CLI and a `ProvadoSignal` shape. Ordered by leverage; build 
 | `signal` | Source (Magento) | Key metrics |
 |---|---|---|
 | `cron_health` | `cron_schedule` GROUP BY status | missed, running, pending, error |
-| `indexer_status` | `mview_state` vs `MAX(*_cl.version_id)`, `indexer_state` | backlog, stuck, invalid |
-| `queue_backlog` | `queue_message_status` (+ RabbitMQ `/api/queues`) | ready, unacked, ack_rate, consumers |
+| `indexer_status` | `mview_state` vs `MAX(*_cl.version_id)`, `indexer_state` | backlog, working, invalid |
+| `queue_backlog` | `queue_message_status` (+ RabbitMQ `/api/queues`) | ready, unacked, consumers (RabbitMQ); new, in_progress, error (DB fallback). `ack_rate` **not shipped yet — deferred to v0.10 (progress axis)** |
 | `cache_validity` | `getInvalidated()` (Instrument shipper) | one event per cache type: `cache` (entity), `invalidated` (0/1) |
 | `consumer_liveness` | consumer config + `isLocked()` (Instrument shipper) | one event per consumer: `consumer` + `queue` (entities), `has_messages` (0/1), `running` (0/1) |
 | `schema_drift` | `setup_module` schema vs data version | mismatched_modules |
 | `maintenance_flag` | `var/.maintenance.flag` stat | present (0/1) |
 | `order_integrity` | `quote` fingerprint, `sales_payment_transaction` aging | orphaned_quotes, uncaptured_aging |
-| `config_change` | `core_config_data.updated_at` deltas | changed_paths (+ NR deploy markers) |
+| `config_change` | `core_config_data.updated_at` deltas | changed_1h, changed_24h, latest_change_age_seconds |
 
 > Most are plain `SELECT`s the shipper runs locally (`provado-ship.php`) — the **"Wire-Up"**
 > signals. A few (`cache_validity` via `Cache\TypeListInterface::getInvalidated()`, consumer

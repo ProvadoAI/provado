@@ -41,16 +41,18 @@ return [
                 //   'operational_signals' — ProvadoSignal custom events
                 // e.g. PROVADO_NEW_RELIC_MODES=transaction_health,operational_signals
                 //
-                // 'operational_signals' is OPT-IN by design (v0.8.0 P1 item 3): it
-                // reads the `ProvadoSignal` custom event type, which only exists once a
-                // merchant deploys a shipper (see docs/signal-shipping.md). Enabling it
-                // without shippers reads an empty type and yields no findings —
-                // indistinguishable from "healthy" — so turning it on is a deliberate
-                // act paired with deploying the shippers. The lead-pattern collapse it
-                // drives is verified live (P1 item 1) but currently relies on the NR
-                // agent's auto-`host`; once Phase 2 ships an intentional, shipper-
-                // independent instance entity, the default flips to include it.
-                'modes' => env('PROVADO_NEW_RELIC_MODES', 'transaction_health'),
+                // 'operational_signals' is ON BY DEFAULT since v0.8.0 (P1 item 3
+                // decision, executed at Phase 2 close): Phase 2 gave every signal an
+                // intentional, shipper-independent instance entity (`source_instance`),
+                // so the lead-pattern collapse it drives is now guaranteed across all
+                // three shippers — not just the NR-agent's incidental auto-`host`.
+                // Caveat unchanged: the mode reads the `ProvadoSignal` custom event
+                // type, which only exists once a merchant deploys a shipper (see
+                // docs/signal-shipping.md). A merchant without shippers reads an empty
+                // type and gets no findings from this mode — set
+                // PROVADO_NEW_RELIC_MODES=transaction_health to opt out until shippers
+                // are deployed.
+                'modes' => env('PROVADO_NEW_RELIC_MODES', 'transaction_health,operational_signals'),
             ],
             'credentials' => [
                 'api_key' => env('PROVADO_NEW_RELIC_API_KEY'),

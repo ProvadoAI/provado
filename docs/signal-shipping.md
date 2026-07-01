@@ -31,6 +31,7 @@ canonical `Signal` model.
 |---|---|---|---|
 | `signal` | string (required) | `SignalType` | e.g. `cron_health`, `indexer_status`, `queue_backlog` |
 | `source` | string (required) | `SignalSource` | e.g. `magento`, or a per-instance id for multi-store |
+| `source_instance` | string (required) | `EntityReference` | stable per-Magento-instance id stamped on **every** event by every shipper, so all signals from one instance share an entity and correlate by design (v0.8.0 Phase 2). Reader maps it via `signal_entity_fields`. |
 | *entity attributes* | string | `EntityReference` | named attributes the reader maps to entity types — e.g. `store`, `indexer`, `queue`, `cron_job` (configurable, reuses the v0.4.0 `facet_entities` idea) |
 | *metric attributes* | numeric | `Signal.attributes` | the readings — e.g. `missed`, `pending`, `backlog`, `dwell_seconds` |
 | `timestamp` | numeric | `Signal.timestamp` | set by the shipper, or auto-stamped by New Relic on ingest |
@@ -130,15 +131,17 @@ event's timestamp. **One reader handles every signal** — `signal='indexer_stat
 > `operational_signals` once v0.8.0 Phase 2 gives every signal an intentional, shipper-independent
 > instance entity.)
 >
-> **Instance entity / shared `host`.** The lead-pattern collapse (a degraded cron folding its
+> **Instance entity — `source_instance`.** The lead-pattern collapse (a degraded cron folding its
 > downstream index/queue/cache/email symptoms into one verdict) depends on the signals from one
-> Magento instance sharing an entity. Today they do, because the New Relic **PHP agent** (Shipper B)
-> auto-stamps `host` on every custom event and `signal_entity_fields` maps `host` → an entity — so
-> the collapse works organically for the PHP-agent shipper (verified on the lab, v0.8.0 P1 item 1).
-> The **Event API** shipper (Shipper C) sends only the explicit payload and does **not** get an
-> auto-`host`, so the collapse would not happen there until Phase 2 ships the instance entity
-> explicitly. Prefer the PHP-agent shipper until then, or add a `host`/`source` per-instance value
-> yourself.
+> Magento instance sharing an entity. Every shipper stamps **`source_instance`** on every event
+> for exactly this (v0.8.0 Phase 2): a stable per-instance id, so the collapse is **intentional and
+> shipper-independent** — it works the same for the PHP-agent shipper (B), the Flex shipper (A) and
+> the Event API shipper (C). It no longer relies on the New Relic **PHP agent** auto-stamping `host`
+> (an incidental side-effect the Event API shipper never gets). The PHP-agent's `host` still lands
+> and `signal_entity_fields` still maps it, so under Shipper B a signal shares *both* `source_instance`
+> and `host` — harmless extra overlap. The reference shippers resolve `source_instance` from
+> `PROVADO_INSTANCE` (falling back to the hostname); set it explicitly to a stable value when the
+> hostname is ephemeral (e.g. containerized Adobe Commerce Cloud).
 
 ## Signal catalog (what to ship)
 

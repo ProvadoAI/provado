@@ -76,9 +76,14 @@ final readonly class NerdGraphClient implements NewRelicClient
      * Event attribute names treated as entity dimensions when mapping
      * `ProvadoSignal` events; any present one becomes an entity of that type.
      *
+     * `source_instance` is the intentional per-instance entity every shipper stamps
+     * (v0.8.0 Phase 2): it makes all signals from one Magento instance share an
+     * entity by design, so the cron lead-pattern collapse no longer depends on the
+     * New Relic agent's auto-`host` side-effect (which the Event API shipper lacks).
+     *
      * @var list<string>
      */
-    private const DEFAULT_SIGNAL_ENTITY_FIELDS = ['store', 'indexer', 'queue', 'cache', 'consumer', 'cron_job', 'host', 'service', 'transaction'];
+    private const DEFAULT_SIGNAL_ENTITY_FIELDS = ['store', 'indexer', 'queue', 'cache', 'consumer', 'cron_job', 'source_instance', 'host', 'service', 'transaction'];
 
     private const GRAPHQL_QUERY = 'query ProvadoNrql($accountId: Int!, $nrql: Nrql!) '
         .'{ actor { account(id: $accountId) { nrql(query: $nrql) { results } } } }';

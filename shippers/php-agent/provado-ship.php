@@ -35,11 +35,23 @@ $pdo = new PDO(
  * Emit one ProvadoSignal custom event. Falls back to a printed line when the
  * New Relic extension is absent, so the shipper is testable off-agent.
  *
+ * Every event carries `source_instance`: a stable per-Magento-instance id so all
+ * signals from one instance share an entity and correlate by design (the reader's
+ * `signal_entity_fields` maps it to an entity). This is intentional and shipper-
+ * independent — it does NOT rely on the New Relic agent's auto-`host` (which the
+ * Event API shipper never gets). Resolved once, injected here so no call site can
+ * omit it and both shippers keep an identical event shape.
+ *
  * @param array<string, scalar> $attributes
  */
 function ship(string $signal, string $source, array $attributes): void
 {
-    $event = ['signal' => $signal, 'source' => $source] + $attributes;
+    static $instance = null;
+    if ($instance === null) {
+        $instance = getenv('PROVADO_INSTANCE') ?: (gethostname() ?: $source);
+    }
+
+    $event = ['signal' => $signal, 'source' => $source, 'source_instance' => $instance] + $attributes;
 
     if (function_exists('newrelic_record_custom_event')) {
         newrelic_record_custom_event('ProvadoSignal', $event);

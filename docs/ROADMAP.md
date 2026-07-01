@@ -12,7 +12,7 @@ Primary source document for direction: `docs/ARCHITECTURE_DIRECTION_SOURCE.md`.
 | v0.11.0 | Planned | [`docs/roadmaps/v0.11.0.md`](roadmaps/v0.11.0.md) |
 | v0.10.0 | Planned | [`docs/roadmaps/v0.10.0.md`](roadmaps/v0.10.0.md) |
 | v0.9.0 | Planned | [`docs/roadmaps/v0.9.0.md`](roadmaps/v0.9.0.md) |
-| v0.8.0 | Planned | [`docs/roadmaps/v0.8.0.md`](roadmaps/v0.8.0.md) |
+| v0.8.0 | In progress | [`docs/roadmaps/v0.8.0.md`](roadmaps/v0.8.0.md) |
 | v0.7.0 | Shipped (tag `0.7.0`) | [`docs/roadmaps/v0.7.0.md`](roadmaps/v0.7.0.md) |
 | v0.6.0 | Shipped (tag `0.6.0`) | [`docs/roadmaps/v0.6.0.md`](roadmaps/v0.6.0.md) |
 | v0.5.0 | Shipped (tag `0.5.0`) | [`docs/roadmaps/v0.5.0.md`](roadmaps/v0.5.0.md) |

@@ -60,7 +60,7 @@ Estos no son de un modo en particular — atraviesan todo y son la razón de la 
 
 | # | Hueco | Impacto | Se cierra en |
 |---|---|---|---|
-| E1 | **Colapso del lead pattern no verificado en producción.** `cron_health` se shippea sin entidad; los shippers reales no mandan `host`/`store`. Solo colapsa con la entidad `host:provado` que inyectan los tests. | La pieza insignia puede no funcionar con datos reales. | v0.8.0 P1–P2 |
+| E1 | **Colapso del lead pattern VERIFICADO orgánicamente en el lab (2026-07-01, v0.8.0 P1 item 1).** El shipper no manda entidad en `cron_health`, pero el **agente PHP de New Relic auto-inyecta `host`** en cada custom event y `signal_entity_fields` ya mapea `host`→entidad, así que las 6 señales del host comparten `host:provado` y colapsan en un veredicto crítico único (incl. plegado de síntomas downstream). El `host:provado` de los tests no era sintético: refleja lo que el agente emite de verdad. | **Riesgo residual, no ruptura total:** el colapso depende del **Shipper B (agente NR)**; Shipper C (Event API) no auto-inyecta `host` → ahí no colapsaría. | v0.8.0 P2 lo hace **intencional y portable** entre shippers |
 | E2 | **Sin diagnóstico operativo standalone.** Todo cuelga de `CronHealthPattern`; un consumer/indexer muerto con cron sano no produce nada. | Mitad de las sub-variantes de #1/#4 son invisibles. | v0.10.0 P1 |
 | E3 | **Síntoma ↔ causa nunca se correlacionan.** Familias distintas no comparten entidad. | Lo que vende la tesis no ocurre. | v0.9.0 P2 |
 | E4 | **Señales live de síntoma no consumidas.** `transaction_health` (NerdGraph) y `order_activity` (REST) se producen live pero ningún patrón las lee; los 4 patrones-síntoma corren solo sobre fixtures. | La capa-síntoma es demo, no diagnóstico live. | v0.9.0 P2 |
@@ -75,7 +75,7 @@ Estos no son de un modo en particular — atraviesan todo y son la razón de la 
 
 | Señal | Estado | ✅ Lo que ya está | ❌ Lo que falta |
 |---|---|---|---|
-| `cron_health` | 🟢 | Shipped live; diagnosticado como raíz (`missed>0`, `pending`/`error` vs baseline aprendido, `running` estancado); dwell onset-based | Robusto; el caveat es el colapso hacia downstream (ver E1) |
+| `cron_health` | 🟢 | Shipped live; diagnosticado como raíz (`missed>0`, `pending`/`error` vs baseline aprendido, `running` estancado); dwell onset-based. **Colapso downstream verificado orgánico en lab (P1 item 1): 1 veredicto crítico plegando edges de indexer + cache reales, unidos por `host:provado` auto-inyectado por el agente NR** | Caveat residual: el colapso depende del `host` que inyecta el agente NR (Shipper B); Shipper C/Event API no lo manda → se hace intencional en P2 (ver E1) |
 | `indexer_status` | 🟡 | Shipped live (backlog, working, invalid); edge `cron→index` (`backlog>0 || invalid>0`); dwell | Shape *"working con backlog 0"* (ACSD-51431, valid-while-failed) no detectado; standalone (E2); mitad motor de búsqueda |
 | `queue_backlog` | 🟡 | Shipped live (ready/unacked/consumers + fallback DB new/in_progress/error); edge `cron→queue` (`ready>0 && consumers==0`) | Eje **progress** (ack_rate/deltas) — no se shippea; shape *"vivo pero estancado"*; DB in_progress/error no diagnosticado; standalone (E2) |
 | `cache_validity` | 🟡 | Shipped live (1 evento/tipo, invalidated 0/1); edge `cron→cache` (`invalidated>0`); dwell | Standalone (E2); colapso orgánico (E1) |

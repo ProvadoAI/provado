@@ -101,6 +101,13 @@ Estos no son de un modo en particular — atraviesan todo y son la razón de la 
 | search-engine cluster | 🔴 | OpenSearch/ES `_count` + cluster status | v0.10.0 P3 |
 | `order_integrity` | 🔴 | quote fingerprint (#6), auth-sin-capture aging (#7) | v0.11.0 P1 |
 | NR deploy markers | 🔴🚧 | `FROM Deployment` (change spine) | v0.11.0 P2 |
+| `inventory_integrity` | 🔴 | `inventory_reservation` net≠0 en orden final + consumer salability (#2) | v0.12.0 P1 |
+| `promo_health` | 🔴 | status/scope/caps + materialización `catalogrule_product_price` + effect `salesrule_coupon_aggregated` (#3) | v0.12.0 P2 |
+| `config_change` con scope + checkout por store | 🔴 | `core_config_data` scope/path + `order_activity` segmentado por `store_id` (#10) | v0.12.0 P3 |
+| `magento_operation`/`magento_bulk` + Odoo | 🔴 | enum de operaciones + consumer `async.operations.all` + lado ERP (#8 live) | v0.13.0 P1 |
+| FPC/cache hit-ratio | 🔴 | varnishstat / probe HIT-MISS; mitad Fastly gated con #9 (#12) | v0.13.0 P2 |
+| PSP (Stripe test) | 🔴 | captures/auth-expiry vs `sales_payment_transaction` (#6/#7 completos) | v0.13.0 P3 |
+| GA4 (Data API) | 🔴 | purchases/revenue vs order ledger; requiere stack GA4 en el lab (infra del mismo phase) (#11) | v0.13.0 P4 |
 
 ---
 
@@ -109,17 +116,17 @@ Estos no son de un modo en particular — atraviesan todo y son la razón de la 
 | # | Modo | Estado | ✅ Lo que ya está | ❌ Lo que falta |
 |---|---|---|---|---|
 | **1** | Silent consumer / queue death | 🟡 ~25% | `queue_backlog` + `consumer_liveness` live; shape *"desconectado/muerto"* vía edges `cron→queue` (`ready>0 && consumers==0`) / `cron→email` (`has_messages>0 && running==0`); dwell + dedup por queue. **Colapso vía cron verificado orgánico (P1 item 1)** | **Fallback DB-queue (`new`/`in_progress`/`error`) se shippea pero NUNCA se diagnostica: `isSymptomatic('queue')` solo mira `ready`+`consumers`, que el evento `db` no lleva**; eje progress (`ack_rate`) no se shippea → *"vivo pero estancado"* invisible; sub-var mensaje-envenenado / lock-atascado (`running=1` pero muerto) / kill-switch; standalone (E2) |
-| **4** | Indexer stagnation → stale price/search | 🟡 | `indexer_status` live (backlog/invalid); edge `cron→index` (`backlog>0 || invalid>0`); dwell. **Edge cron→index verificado orgánico (P1 item 1): indexers `invalid=1` plegados en el veredicto de cron** | Shape *valid-while-failed*: **el shipper manda `working` pero el patrón lo ignora** (`isSymptomatic('index')` solo mira `backlog`/`invalid`, nunca `working`) → view atascado en "working" con 0 backlog no se detecta; standalone (E2); **mitad motor de búsqueda** (OpenSearch cluster) |
+| **4** | Indexer stagnation → stale price/search | 🟡 | `indexer_status` live (backlog/invalid); edge `cron→index` (`backlog>0 || invalid>0`); dwell. **Edge cron→index verificado orgánico (P1 item 1): indexers `invalid=1` plegados en el veredicto de cron** | Shape *valid-while-failed*: **el shipper manda `working` pero el patrón lo ignora** (`isSymptomatic('index')` solo mira `backlog`/`invalid`, nunca `working`) → view atascado en "working" con 0 backlog no se detecta (**agendado v0.10 P3 item 3**); standalone (E2); **mitad motor de búsqueda** (OpenSearch cluster) |
 | **5** | Deploy/config regression ("what changed") | 🟡→ 🔴 para diagnóstico | `config_change` live (superficie sin-marcador `core_config_data`) | **No hay diagnóstico de este modo.** `config_change` **solo** se lee dentro de `CronHealthPattern` como stamp pasivo (`recent_config_change` / `latest_config_change_age_seconds`) — **ningún patrón produce un finding a partir de él**; sin un veredicto de cron no aporta nada. Falta: **deploy markers de NR** (`FROM Deployment`), atribución standalone (correlacionar un cambio con un síntoma sin depender del cron), superficie env.php |
-| **8** | Cross-system sync stoppage (ERP/feed) | ⚪ | `CatalogFeedSyncFailurePattern` existe; `SIM-ERP-001` reproducido | **Fixture-only confirmado en código:** el patrón exige tipos `catalog_feed_sync_failure` + (`indexer_stuck`\|`inventory_sync_drift`) desde `adobe_commerce`, pero el adaptador REST live produce **solo `order_activity`** → nunca dispara fuera de fixtures. Falta: fuente ERP real (Odoo); `magento_operation`/`magento_bulk`; wiring live |
-| **2** | Inventory drift / oversell | 🔴 | Nada (fixture `inventory_sync_drift` solo alimenta el patrón de catálogo como impacto, no un diagnóstico de drift) | `inventory_reservation` net≠0, salable qty, consumer `updateSalabilityStatus` |
-| **3** | Promotion / price-rule deja de aplicar | 🔴 | Nada | `catalogrule_product_price` materialización, usage caps, effect (`salesrule_coupon_aggregated`) |
+| **8** | Cross-system sync stoppage (ERP/feed) | ⚪ | `CatalogFeedSyncFailurePattern` existe; `SIM-ERP-001` reproducido | **Fixture-only confirmado en código:** el patrón exige tipos `catalog_feed_sync_failure` + (`indexer_stuck`\|`inventory_sync_drift`) desde `adobe_commerce`, pero el adaptador REST live produce **solo `order_activity`** → nunca dispara fuera de fixtures. Falta: fuente ERP real (Odoo); `magento_operation`/`magento_bulk`; wiring live → **agendado v0.13 P1** |
+| **2** | Inventory drift / oversell | 🔴 | Nada (fixture `inventory_sync_drift` solo alimenta el patrón de catálogo como impacto, no un diagnóstico de drift) | `inventory_reservation` net≠0, salable qty, consumer `updateSalabilityStatus` → **agendado v0.12 P1** |
+| **3** | Promotion / price-rule deja de aplicar | 🔴 | Nada | `catalogrule_product_price` materialización, usage caps, effect (`salesrule_coupon_aggregated`) → **agendado v0.12 P2** |
 | **6** | Silent order loss (quote huérfana) | 🔴 | Nada (`order_activity` live existe pero sin patrón; `SIM-PAY-001` draft) | quote fingerprint (`reserved_order_id`, `is_active=1`, sin `sales_order`); señal `order_integrity` |
 | **7** | Order creado, pago nunca capturado | 🔴 | Nada (`SIM-PAY-002` draft; PaymentConfigRegression es 3DS-config, fixture) | `sales_payment_transaction` auth-sin-capture aging; reconciliación PSP |
-| **10** | Per-region tax/payment config break | 🔴 | Nada | `core_config_data` con scope, `tax_calculation_*`, éxito de checkout por `store_id` |
-| **12** | Cacheability rota por deploy | 🔴 | Nada (`cache_validity` es invalidación, **no** cacheability) | FPC hit-ratio, blast-radius de `cacheable="false"` |
-| **9** | Bot bueno bloqueado en edge/WAF | 🔴🚧 | Nada | Fuente Fastly/CDN/WAF (sin infra en el lab) |
-| **11** | Measurement / consent / tag breakage | 🔴🚧 | Nada | Stack GA4/consent (sin infra en el lab) |
+| **10** | Per-region tax/payment config break | 🔴 | Nada | `core_config_data` con scope, `tax_calculation_*`, éxito de checkout por `store_id` → **agendado v0.12 P3** |
+| **12** | Cacheability rota por deploy | 🔴 | Nada (`cache_validity` es invalidación, **no** cacheability) | FPC hit-ratio, blast-radius de `cacheable="false"` → **agendado v0.13 P2** (mitad Fastly gated con #9) |
+| **9** | Bot bueno bloqueado en edge/WAF | 🔴🚧 | Nada | Fuente Fastly/CDN/WAF (sin infra en el lab). **EXCLUIDO del objetivo full-coverage (decisión 2026-07-01)** — revisitar con merchant ACC/Fastly |
+| **11** | Measurement / consent / tag breakage | 🔴🚧→🔴 | Nada | Stack GA4 real en el lab + adapter Data API + divergencia vs order ledger → **agendado v0.13 P4** (la infra es item del phase; deja de estar gated) |
 
 **Conteo (re-auditado 2026-07-01, v0.8.0 P1 item 2):** 0/12 diagnosticados live de verdad · **2 parciales (#1, #4)** — y su slice cron-atribuido quedó **verificado orgánico** en P1 item 1 · **#5 baja a señal-live-sin-diagnóstico** (`config_change` se shippea pero ningún patrón lo diagnostica; solo es stamp) · 1 fixture-only (#8) · resto 🔴 (2 gated).
 
@@ -142,6 +149,14 @@ no para "la señal llega" ni para "el fixture pasa".
 
 - **E1, #1/#4/#5 (correlación real + fidelidad):** [`v0.8.0`](roadmaps/v0.8.0.md)
 - **E3, E4, E5, E6 (correlación inteligente + cross-family):** [`v0.9.0`](roadmaps/v0.9.0.md)
-- **E2, #1/#4 restante, #8 wiring, search, easy wins:** [`v0.10.0`](roadmaps/v0.10.0.md)
-- **#6, #7, #5 deploy markers:** [`v0.11.0`](roadmaps/v0.11.0.md)
-- **#2, #3, #10, #12:** breadth sin agendar. **#9, #11:** gated (sin infra).
+- **E2, #1/#4 restante (incl. *valid-while-failed*, P3 item 3), search, easy wins:** [`v0.10.0`](roadmaps/v0.10.0.md)
+- **#6, #7 (lado Magento), #5 deploy markers:** [`v0.11.0`](roadmaps/v0.11.0.md)
+- **#2, #3, #10:** [`v0.12.0`](roadmaps/v0.12.0.md)
+- **#8 wiring live (Odoo + `magento_operation`), #12, reconciliación PSP (#6/#7 completos, Stripe test), #11 (stack GA4 real en el lab):** [`v0.13.0`](roadmaps/v0.13.0.md)
+- **#9: EXCLUIDO del objetivo full-coverage (decisión 2026-07-01)** — sin Fastly/ACC en el lab y sin
+  stand-in significativo para el WAF que es propiedad de Adobe; queda 🚧 hasta tener un merchant en
+  ACC/Fastly (la mitad Fastly-Stats de #12 viaja en el mismo gate).
+
+> **Objetivo full-coverage (2026-07-01):** diagnosticar los 12 modos + las 7 señales operativas en
+> el lab **antes** del outreach a merchants (willingness-to-pay sigue siendo la asunción abierta de
+> siempre — se valida después, con el catálogo completo demostrable). Única exclusión: #9.

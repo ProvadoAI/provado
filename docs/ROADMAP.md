@@ -9,6 +9,8 @@ Primary source document for direction: `docs/ARCHITECTURE_DIRECTION_SOURCE.md`.
 
 | Version | Status | File |
 |---|---|---|
+| v0.13.0 | Planned | [`docs/roadmaps/v0.13.0.md`](roadmaps/v0.13.0.md) |
+| v0.12.0 | Planned | [`docs/roadmaps/v0.12.0.md`](roadmaps/v0.12.0.md) |
 | v0.11.0 | Planned | [`docs/roadmaps/v0.11.0.md`](roadmaps/v0.11.0.md) |
 | v0.10.0 | Planned | [`docs/roadmaps/v0.10.0.md`](roadmaps/v0.10.0.md) |
 | v0.9.0 | **In progress** | [`docs/roadmaps/v0.9.0.md`](roadmaps/v0.9.0.md) |
@@ -39,6 +41,21 @@ integrity**.
 | 5c — search-engine cluster half (#4/#6) | v0.10.0 Phase 3 |
 | 5d — order/payment integrity (#6/#7) | v0.11.0 Phase 1 |
 | 5e — New Relic deploy markers (change spine) | v0.11.0 Phase 2 |
+
+## Full-catalog coverage extension (2026-07-01)
+
+Goal decided 2026-07-01: **before merchant outreach, diagnose every failure mode in the signal
+catalog** (the 12 traces in `docs/simulations/Provado Signals and diagnosis.md` + the 7 operational
+signals in `… - Additional.md`) on the lab — independent of willingness-to-pay validation, which
+stays the open assumption it always was. `v0.12.0`–`v0.13.0` extend the arc to the modes
+`v0.8.0`–`v0.11.0` leave open:
+
+| Remaining gap | Lands in |
+|---|---|
+| #2 inventory drift, #3 promotion/price-rule effect, #10 per-region config | v0.12.0 |
+| #8 live ERP wiring (Odoo + `magento_operation`), #12 cacheability, PSP reconciliation completing #6/#7 (Stripe test), #11 measurement slice (real GA4 stack on the lab) | v0.13.0 |
+| #4 *valid-while-failed* shape (shipped-but-ignored `working` flag) | v0.10.0 Phase 3 |
+| #9 edge/WAF | **Excluded** from the goal (decision 2026-07-01) — no Fastly/ACC infra; revisit with a merchant |
 
 **Coverage map:** the honest, living view of where diagnosis stands (per signal + per failure
 mode, each with `✅ what exists` / `❌ what's missing`, plus a renderable mermaid overview and the

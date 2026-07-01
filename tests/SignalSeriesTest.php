@@ -115,6 +115,55 @@ class SignalSeriesTest extends TestCase
         $this->assertSame(0, $series->dwellSeconds($this->indexer('catalogsearch_fulltext', 9, '11:00'), $this->backlogged()));
     }
 
+    public function test_onset_is_the_start_of_the_current_bad_run_after_a_healthy_snapshot(): void
+    {
+        $series = new SignalSeries([
+            $this->cronAt(500, '10:50'), // bad, but before the healthy break
+            $this->cronAt(10, '11:00'),  // healthy break resets the run
+            $this->cronAt(300, '11:05'), // onset of the current bad run
+            $this->cronAt(400, '11:10'),
+        ]);
+
+        $onset = $series->onsetFor($this->cronAt(400, '11:10'), $this->backlogged());
+
+        $this->assertNotNull($onset);
+        $this->assertSame('11:05', $onset->timestamp->format('H:i'));
+        $this->assertFalse($onset->censored);
+    }
+
+    public function test_onset_is_censored_when_the_series_was_never_observed_healthy(): void
+    {
+        // Bad from the very first snapshot: the true onset may be earlier than
+        // anything we saw, so the estimate is only an upper bound.
+        $series = new SignalSeries([
+            $this->cronAt(300, '11:00'),
+            $this->cronAt(400, '11:05'),
+        ]);
+
+        $onset = $series->onsetFor($this->cronAt(400, '11:05'), $this->backlogged());
+
+        $this->assertNotNull($onset);
+        $this->assertSame('11:00', $onset->timestamp->format('H:i'));
+        $this->assertTrue($onset->censored);
+    }
+
+    public function test_onset_is_null_when_the_latest_snapshot_is_not_bad(): void
+    {
+        $series = new SignalSeries([
+            $this->cronAt(500, '11:00'),
+            $this->cronAt(10, '11:10'),
+        ]);
+
+        $this->assertNull($series->onsetFor($this->cronAt(10, '11:10'), $this->backlogged()));
+    }
+
+    public function test_onset_is_null_when_no_snapshot_matches_the_reference(): void
+    {
+        $series = new SignalSeries([$this->cronAt(500, '11:00')]);
+
+        $this->assertNull($series->onsetFor($this->indexer('catalogsearch_fulltext', 9, '11:00'), $this->backlogged()));
+    }
+
     public function test_baseline_for_collects_the_metric_across_the_matching_series(): void
     {
         $series = new SignalSeries([

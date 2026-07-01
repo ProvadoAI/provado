@@ -70,10 +70,51 @@ final readonly class SignalSeries
      */
     public function dwellSeconds(Signal $reference, callable $isBad): int
     {
+        $run = $this->currentBadRun($reference, $isBad);
+
+        if ($run === null) {
+            return 0;
+        }
+
+        return $run['latest']->timestamp->getTimestamp() - $run['onset']->timestamp->getTimestamp();
+    }
+
+    /**
+     * When the current state is bad (per `$isBad`), the estimated onset of that bad
+     * run — the same walk that backs dwellSeconds(), exposed as a point in time so
+     * attribution can compare a symptom's onset against its cause's. Null when the
+     * latest matching snapshot is not bad (no current bad run) or nothing matches.
+     * The estimate is censored when the run reaches the series' first snapshot
+     * (never observed healthy — see OnsetEstimate).
+     *
+     * @param callable(Signal): bool $isBad
+     */
+    public function onsetFor(Signal $reference, callable $isBad): ?OnsetEstimate
+    {
+        $run = $this->currentBadRun($reference, $isBad);
+
+        if ($run === null) {
+            return null;
+        }
+
+        return new OnsetEstimate($run['onset']->timestamp, $run['censored']);
+    }
+
+    /**
+     * The unbroken run of bad snapshots ending at the latest snapshot of the series
+     * matching `$reference` — the shared walk behind dwell and onset. Null when the
+     * latest matching snapshot is not bad or nothing matches. `censored` is true
+     * when the run includes the first snapshot (the true onset may be earlier).
+     *
+     * @param callable(Signal): bool $isBad
+     * @return ?array{onset: Signal, latest: Signal, censored: bool}
+     */
+    private function currentBadRun(Signal $reference, callable $isBad): ?array
+    {
         $matching = $this->matchingSeries($reference);
 
         if ($matching === []) {
-            return 0;
+            return null;
         }
 
         usort($matching, static fn (Signal $a, Signal $b): int => $a->timestamp <=> $b->timestamp);
@@ -81,7 +122,7 @@ final readonly class SignalSeries
         $latest = $matching[count($matching) - 1];
 
         if (! $isBad($latest)) {
-            return 0;
+            return null;
         }
 
         // Walk back over the contiguous run of bad snapshots ending at the latest;
@@ -96,7 +137,7 @@ final readonly class SignalSeries
             $onset = $matching[$i];
         }
 
-        return $latest->timestamp->getTimestamp() - $onset->timestamp->getTimestamp();
+        return ['onset' => $onset, 'latest' => $latest, 'censored' => $onset === $matching[0]];
     }
 
     /**

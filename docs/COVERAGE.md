@@ -35,7 +35,7 @@ flowchart TB
         direction TB
         M1["#1 Silent consumer/queue death"]:::yellow
         M4["#4 Indexer stagnation → stale price/search"]:::yellow
-        M5["#5 Deploy/config regression"]:::yellow
+        M5["#5 Deploy/config regression<br/><small>señal live, sin diagnóstico</small>"]:::red
         M8["#8 Cross-system sync stoppage (ERP/feed)"]:::white
         M2["#2 Inventory drift"]:::red
         M3["#3 Promotion/price-rule"]:::red
@@ -51,7 +51,7 @@ flowchart TB
     CRON --> M4
     CRON --> M5
 
-    LEG["🟢 live · 🟡 parcial · ⚪ fixture-only · 🔴 no · 🚧 gated<br/>0/12 verde · 3 amarillo · 1 fixture · 8 rojo (2 gated)"]
+    LEG["🟢 live · 🟡 parcial · ⚪ fixture-only · 🔴 no · 🚧 gated<br/>0/12 verde · 2 amarillo (#1 #4) · 1 fixture (#8) · 9 rojo (2 gated)"]
 ```
 
 ## Big picture: 6 huecos estructurales (transversales)
@@ -76,7 +76,7 @@ Estos no son de un modo en particular — atraviesan todo y son la razón de la 
 | Señal | Estado | ✅ Lo que ya está | ❌ Lo que falta |
 |---|---|---|---|
 | `cron_health` | 🟢 | Shipped live; diagnosticado como raíz (`missed>0`, `pending`/`error` vs baseline aprendido, `running` estancado); dwell onset-based. **Colapso downstream verificado orgánico en lab (P1 item 1): 1 veredicto crítico plegando edges de indexer + cache reales, unidos por `host:provado` auto-inyectado por el agente NR** | Caveat residual: el colapso depende del `host` que inyecta el agente NR (Shipper B); Shipper C/Event API no lo manda → se hace intencional en P2 (ver E1) |
-| `indexer_status` | 🟡 | Shipped live (backlog, working, invalid); edge `cron→index` (`backlog>0 || invalid>0`); dwell | Shape *"working con backlog 0"* (ACSD-51431, valid-while-failed) no detectado; standalone (E2); mitad motor de búsqueda |
+| `indexer_status` | 🟡 | Shipped live (backlog, working, invalid); edge `cron→index` (`backlog>0 || invalid>0`); dwell | Shape *"working con backlog 0"* (ACSD-51431, valid-while-failed) no detectado — el shipper manda `working` pero el patrón no lo lee; standalone (E2); mitad motor de búsqueda |
 | `queue_backlog` | 🟡 | Shipped live (ready/unacked/consumers + fallback DB new/in_progress/error); edge `cron→queue` (`ready>0 && consumers==0`) | Eje **progress** (ack_rate/deltas) — no se shippea; shape *"vivo pero estancado"*; DB in_progress/error no diagnosticado; standalone (E2) |
 | `cache_validity` | 🟡 | Shipped live (1 evento/tipo, invalidated 0/1); edge `cron→cache` (`invalidated>0`); dwell | Standalone (E2); colapso orgánico (E1) |
 | `consumer_liveness` | 🟡 | Shipped live (has_messages/running vía `isLocked`); edge `cron→email` (`has_messages>0 && running==0`); dedup por link consumer→queue | Sub-var *lock atascado* (`running=1` pero muerto) no detectable; *kill switch* (deja de shippear); standalone (E2) |
@@ -108,10 +108,10 @@ Estos no son de un modo en particular — atraviesan todo y son la razón de la 
 
 | # | Modo | Estado | ✅ Lo que ya está | ❌ Lo que falta |
 |---|---|---|---|---|
-| **1** | Silent consumer / queue death | 🟡 ~25% | `queue_backlog` + `consumer_liveness` live; shape *"desconectado/muerto"* vía edges `cron→queue`/`cron→email`; dwell + dedup por queue | Eje progress → *"vivo pero estancado"*; sub-var mensaje-envenenado / lock-atascado / kill-switch; standalone (E2); colapso orgánico (E1) |
-| **4** | Indexer stagnation → stale price/search | 🟡 | `indexer_status` live (backlog/invalid); edge `cron→index`; dwell | Shape *valid-while-failed* (working con 0 backlog); standalone (E2); **mitad motor de búsqueda** (OpenSearch cluster) |
-| **5** | Deploy/config regression ("what changed") | 🟡 | `config_change` live (superficie sin-marcador `core_config_data`); usado como change-stamp en el veredicto | **Deploy markers de NR** (`FROM Deployment`); atribución standalone (correlacionar un cambio con un síntoma sin depender del cron); superficie env.php |
-| **8** | Cross-system sync stoppage (ERP/feed) | ⚪ | `CatalogFeedSyncFailurePattern` existe; `SIM-ERP-001` reproducido | Todo el diagnóstico es **fixture-only**; fuente ERP real (Odoo); `magento_operation`/`magento_bulk`; wiring live |
+| **1** | Silent consumer / queue death | 🟡 ~25% | `queue_backlog` + `consumer_liveness` live; shape *"desconectado/muerto"* vía edges `cron→queue` (`ready>0 && consumers==0`) / `cron→email` (`has_messages>0 && running==0`); dwell + dedup por queue. **Colapso vía cron verificado orgánico (P1 item 1)** | **Fallback DB-queue (`new`/`in_progress`/`error`) se shippea pero NUNCA se diagnostica: `isSymptomatic('queue')` solo mira `ready`+`consumers`, que el evento `db` no lleva**; eje progress (`ack_rate`) no se shippea → *"vivo pero estancado"* invisible; sub-var mensaje-envenenado / lock-atascado (`running=1` pero muerto) / kill-switch; standalone (E2) |
+| **4** | Indexer stagnation → stale price/search | 🟡 | `indexer_status` live (backlog/invalid); edge `cron→index` (`backlog>0 || invalid>0`); dwell. **Edge cron→index verificado orgánico (P1 item 1): indexers `invalid=1` plegados en el veredicto de cron** | Shape *valid-while-failed*: **el shipper manda `working` pero el patrón lo ignora** (`isSymptomatic('index')` solo mira `backlog`/`invalid`, nunca `working`) → view atascado en "working" con 0 backlog no se detecta; standalone (E2); **mitad motor de búsqueda** (OpenSearch cluster) |
+| **5** | Deploy/config regression ("what changed") | 🟡→ 🔴 para diagnóstico | `config_change` live (superficie sin-marcador `core_config_data`) | **No hay diagnóstico de este modo.** `config_change` **solo** se lee dentro de `CronHealthPattern` como stamp pasivo (`recent_config_change` / `latest_config_change_age_seconds`) — **ningún patrón produce un finding a partir de él**; sin un veredicto de cron no aporta nada. Falta: **deploy markers de NR** (`FROM Deployment`), atribución standalone (correlacionar un cambio con un síntoma sin depender del cron), superficie env.php |
+| **8** | Cross-system sync stoppage (ERP/feed) | ⚪ | `CatalogFeedSyncFailurePattern` existe; `SIM-ERP-001` reproducido | **Fixture-only confirmado en código:** el patrón exige tipos `catalog_feed_sync_failure` + (`indexer_stuck`\|`inventory_sync_drift`) desde `adobe_commerce`, pero el adaptador REST live produce **solo `order_activity`** → nunca dispara fuera de fixtures. Falta: fuente ERP real (Odoo); `magento_operation`/`magento_bulk`; wiring live |
 | **2** | Inventory drift / oversell | 🔴 | Nada (fixture `inventory_sync_drift` solo alimenta el patrón de catálogo como impacto, no un diagnóstico de drift) | `inventory_reservation` net≠0, salable qty, consumer `updateSalabilityStatus` |
 | **3** | Promotion / price-rule deja de aplicar | 🔴 | Nada | `catalogrule_product_price` materialización, usage caps, effect (`salesrule_coupon_aggregated`) |
 | **6** | Silent order loss (quote huérfana) | 🔴 | Nada (`order_activity` live existe pero sin patrón; `SIM-PAY-001` draft) | quote fingerprint (`reserved_order_id`, `is_active=1`, sin `sales_order`); señal `order_integrity` |
@@ -121,7 +121,13 @@ Estos no son de un modo en particular — atraviesan todo y son la razón de la 
 | **9** | Bot bueno bloqueado en edge/WAF | 🔴🚧 | Nada | Fuente Fastly/CDN/WAF (sin infra en el lab) |
 | **11** | Measurement / consent / tag breakage | 🔴🚧 | Nada | Stack GA4/consent (sin infra en el lab) |
 
-**Conteo:** 0/12 diagnosticados live de verdad · 3 parciales (#1, #4, #5) · 1 fixture-only (#8) · 8 sin cubrir (2 de ellos gated).
+**Conteo (re-auditado 2026-07-01, v0.8.0 P1 item 2):** 0/12 diagnosticados live de verdad · **2 parciales (#1, #4)** — y su slice cron-atribuido quedó **verificado orgánico** en P1 item 1 · **#5 baja a señal-live-sin-diagnóstico** (`config_change` se shippea pero ningún patrón lo diagnostica; solo es stamp) · 1 fixture-only (#8) · resto 🔴 (2 gated).
+
+> **Re-auditoría #1/#4/#5/#8 (2026-07-01, v0.8.0 P1 item 2) — contra el código, no contra fixtures:**
+> - **#1** — el slice cron-atribuido (queue desconectada / consumer muerto) ahora está **verificado en vivo** (P1 item 1). Gap nuevo hallado: el evento fallback `queue:db` (`new`/`in_progress`/`error`) **se shippea pero es indiagnosticable** — la condición de síntoma solo mira `ready`+`consumers`.
+> - **#4** — edge `cron→index` **verificado en vivo**. El shipper manda el flag `working` pero el patrón **no lo usa**: la variante *valid-while-failed* (working, 0 backlog) sigue invisible pese a que el dato llega.
+> - **#5** — corrección de sobre-optimismo: **no hay diagnóstico**. `config_change` solo decora el veredicto de cron; no existe patrón que lo lea como modo. Era el 🟡 más generoso del mapa.
+> - **#8** — fixture-only **confirmado en código**: los tipos que el patrón exige no los produce ninguna fuente live (REST solo emite `order_activity`).
 
 ---
 

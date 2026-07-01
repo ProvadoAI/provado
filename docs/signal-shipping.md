@@ -120,6 +120,26 @@ from the configured entity-attribute names, attributes = the numeric fields, tim
 event's timestamp. **One reader handles every signal** — `signal='indexer_status'`,
 `'queue_backlog'`, etc. — regardless of which shipper produced the event.
 
+> **Reading these signals is opt-in.** Provado's New Relic source has two query modes and defaults
+> to `transaction_health` only. To read the shipped `ProvadoSignal` events you must enable the
+> `operational_signals` mode explicitly:
+> `PROVADO_NEW_RELIC_MODES=transaction_health,operational_signals`. This is deliberate: the mode
+> reads the `ProvadoSignal` custom event type, which exists only once a shipper is deployed —
+> enabling it without shippers reads an empty type and produces no findings. Turn it on together
+> with deploying a shipper. (Posture decision: v0.8.0 P1 item 3; the default will include
+> `operational_signals` once v0.8.0 Phase 2 gives every signal an intentional, shipper-independent
+> instance entity.)
+>
+> **Instance entity / shared `host`.** The lead-pattern collapse (a degraded cron folding its
+> downstream index/queue/cache/email symptoms into one verdict) depends on the signals from one
+> Magento instance sharing an entity. Today they do, because the New Relic **PHP agent** (Shipper B)
+> auto-stamps `host` on every custom event and `signal_entity_fields` maps `host` → an entity — so
+> the collapse works organically for the PHP-agent shipper (verified on the lab, v0.8.0 P1 item 1).
+> The **Event API** shipper (Shipper C) sends only the explicit payload and does **not** get an
+> auto-`host`, so the collapse would not happen there until Phase 2 ships the instance entity
+> explicitly. Prefer the PHP-agent shipper until then, or add a `host`/`source` per-instance value
+> yourself.
+
 ## Signal catalog (what to ship)
 
 Per the signal docs (`Provado Signals and diagnosis.md` + `…- Additional.md`), each signal below

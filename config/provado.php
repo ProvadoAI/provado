@@ -40,6 +40,16 @@ return [
                 //   'transaction_health'  — APM transactions (the symptom layer)
                 //   'operational_signals' — ProvadoSignal custom events
                 // e.g. PROVADO_NEW_RELIC_MODES=transaction_health,operational_signals
+                //
+                // 'operational_signals' is OPT-IN by design (v0.8.0 P1 item 3): it
+                // reads the `ProvadoSignal` custom event type, which only exists once a
+                // merchant deploys a shipper (see docs/signal-shipping.md). Enabling it
+                // without shippers reads an empty type and yields no findings —
+                // indistinguishable from "healthy" — so turning it on is a deliberate
+                // act paired with deploying the shippers. The lead-pattern collapse it
+                // drives is verified live (P1 item 1) but currently relies on the NR
+                // agent's auto-`host`; once Phase 2 ships an intentional, shipper-
+                // independent instance entity, the default flips to include it.
                 'modes' => env('PROVADO_NEW_RELIC_MODES', 'transaction_health'),
             ],
             'credentials' => [

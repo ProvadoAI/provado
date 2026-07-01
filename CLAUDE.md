@@ -46,11 +46,17 @@
      - **Review:** run `/code-review` on the diff and read the diff yourself.
   5. **Hand off** — `git add`, commit (with the `/code-review` summary in the body for
      source changes), and push to `main`. Include this item's status flip in the active
-     roadmap file under `docs/roadmaps/` in the same commit.
+     roadmap file under `docs/roadmaps/` in the same commit. **Coverage:** if the item changes
+     what Provado diagnoses **on live data**, update the matching row(s) in `docs/COVERAGE.md`
+     in the same commit — green means *diagnosed on live data*, never "the signal ships" or
+     "the fixture passes". If the item moves no coverage cell (a verification, a hygiene fix, an
+     internal refactor), say so and skip it — don't force an update. When an item completes a
+     whole version, bump the map's `Measured against` / `Last updated` line.
   6. Move to the next item in scope.
 - An item is done once its change is committed and pushed. Flip its status in the active
   roadmap file under `docs/roadmaps/` (e.g. `[ ]` → `[x]`) in the same commit as the change
-  — don't leave a separate trailing commit just for the checkbox.
+  — don't leave a separate trailing commit just for the checkbox (same for any
+  `docs/COVERAGE.md` cell the item moved).
 
 ## Parallelism
 

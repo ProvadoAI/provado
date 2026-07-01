@@ -64,19 +64,31 @@ class LiveClientContractTest extends TestCase
         [$cron, $indexer] = $result->signals();
         $this->assertSame('cron_health', $cron->type->value);
         $this->assertSame('magento', $cron->source->value);
-        $this->assertTrue($cron->hasEntity(new EntityReference('store', 'default')));
+        // v0.8.0 Phase 3: the recording replays what the shipper actually emits.
+        // cron_health ships pending/running/success/missed/error and NO `store`
+        // (the shipper never sends it) — assert the real metric shape.
         $this->assertSame(3, $cron->attributes['missed']);
+        $this->assertSame(480, $cron->attributes['success']);
+        $this->assertFalse($cron->hasEntity(new EntityReference('store', 'default')));
 
         $this->assertSame('indexer_status', $indexer->type->value);
         $this->assertTrue($indexer->hasEntity(new EntityReference('indexer', 'catalogsearch_fulltext')));
         $this->assertSame(420, $indexer->attributes['backlog']);
+        // The shipper ships `working`/`invalid` flags, never a `stuck` attribute
+        // (no consumer reads it; the cron→index edge looks at backlog/invalid).
+        $this->assertSame(1, $indexer->attributes['working']);
+        $this->assertSame(0, $indexer->attributes['invalid']);
+        $this->assertArrayNotHasKey('stuck', $indexer->attributes);
 
         // v0.8.0 Phase 2: every shipper stamps `source_instance`, so the reader gives
         // both signals the same instance entity — the shipper-independent basis for
-        // the cron lead-pattern collapse (both land in one correlation group).
+        // the cron lead-pattern collapse (both land in one correlation group). Under
+        // the PHP-agent shipper the agent's auto-`host` also lands (harmless overlap).
         $instance = new EntityReference('source_instance', 'shop-1');
         $this->assertTrue($cron->hasEntity($instance));
         $this->assertTrue($indexer->hasEntity($instance));
+        $this->assertTrue($cron->hasEntity(new EntityReference('host', 'shop-1')));
+        $this->assertTrue($indexer->hasEntity(new EntityReference('host', 'shop-1')));
     }
 
     public function test_adobe_commerce_orders_recording_maps_to_order_activity(): void

@@ -11,10 +11,11 @@
                 "signal": "cron_health",
                 "source": "magento",
                 "source_instance": "shop-1",
-                "store": "default",
-                "missed": 3,
-                "running": 1,
+                "host": "shop-1",
                 "pending": 12,
+                "running": 1,
+                "success": 480,
+                "missed": 3,
                 "error": 0,
                 "timestamp": 1700000000000
               },
@@ -22,9 +23,11 @@
                 "signal": "indexer_status",
                 "source": "magento",
                 "source_instance": "shop-1",
+                "host": "shop-1",
                 "indexer": "catalogsearch_fulltext",
                 "backlog": 420,
-                "stuck": 1,
+                "working": 1,
+                "invalid": 0,
                 "timestamp": 1700000000000
               }
             ]
